@@ -4,6 +4,21 @@ A step-by-step guide to configure and run the system for the first time.
 
 ---
 
+## Helper Scripts
+
+This guide uses helper scripts from the `scripts/` folder to simplify common tasks:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/check_config.py` | Verify API keys and environment setup |
+| `scripts/import_portfolio.py` | Import Fidelity CSV exports |
+| `scripts/test_market_data.py` | Test market data fetching |
+| `scripts/test_screener.py` | Test stock screener |
+| `scripts/check_database.py` | View database status |
+| `scripts/run_system.py` | Run the trading system |
+
+---
+
 ## Prerequisites
 
 - macOS 12+
@@ -156,44 +171,44 @@ Z12345678,Individual,SPAXX,FIDELITY GOVERNMENT MONEY MARKET,3500.00,1.00,3500.00
 source venv/bin/activate
 source .env
 
-python -c "
-from src.agents.portfolio_accountant import PortfolioAccountant
-pa = PortfolioAccountant('data/agent.db')
-snapshot_id = pa.import_fidelity_csv('inbox/sample_portfolio.csv')
-snapshot = pa.get_latest_snapshot()
-print(f'Imported snapshot #{snapshot_id}')
-print(f'Total Equity: \${snapshot[\"total_equity\"]:,.2f}')
-print(f'Cash: \${snapshot[\"cash_balance\"]:,.2f}')
-print(f'Holdings: {len(snapshot[\"holdings\"])}')
-for h in snapshot['holdings']:
-    print(f'  {h[\"symbol\"]}: {h[\"quantity\"]} shares')
-"
+# Import the most recent CSV from inbox/
+python scripts/import_portfolio.py
+
+# Or specify a file:
+python scripts/import_portfolio.py inbox/sample_portfolio.csv
+```
+
+Expected output:
+```
+📄 Using most recent CSV: my_portfolio.csv
+
+📥 Importing: inbox/my_portfolio.csv
+--------------------------------------------------
+
+✅ Import successful! Snapshot #1
+
+==================================================
+                PORTFOLIO SUMMARY
+==================================================
+  Total Equity:  $        10,000.00
+  Cash Balance:  $        10,000.00
+  Invested:      $             0.00
+  Positions:                     0
+==================================================
 ```
 
 ---
 
 ## Step 7: Verify Configuration
 
-Run this to check what's configured:
-
 ```bash
 source venv/bin/activate
 source .env
 
-python -c "
-import os
-
-print('=== API Keys Status ===')
-print(f'GEMINI_API_KEY:       {\"✅ Set\" if os.getenv(\"GEMINI_API_KEY\") else \"❌ Not set\"}')
-print(f'ALPACA_API_KEY:       {\"✅ Set\" if os.getenv(\"ALPACA_API_KEY\") else \"❌ Not set (will use Yahoo)\"}')
-print(f'ALPHA_VANTAGE_KEY:    {\"✅ Set\" if os.getenv(\"ALPHA_VANTAGE_API_KEY\") else \"❌ Not set (screener backup)\"}')
-print(f'FINNHUB_API_KEY:      {\"✅ Set\" if os.getenv(\"FINNHUB_API_KEY\") else \"❌ Not set (no news)\"}')
-print()
-print('=== Notification Status ===')
-print(f'GMAIL_USER:        {\"✅ Set\" if os.getenv(\"GMAIL_USER\") else \"❌ Not set\"}')
-print(f'IMESSAGE_RECIPIENT:{\"✅ Set\" if os.getenv(\"IMESSAGE_RECIPIENT\") else \"❌ Not set\"}')
-"
+python scripts/check_config.py
 ```
+
+This checks all API keys, config files, database, and inbox folder status.
 
 ---
 
@@ -203,54 +218,53 @@ print(f'IMESSAGE_RECIPIENT:{\"✅ Set\" if os.getenv(\"IMESSAGE_RECIPIENT\") els
 source venv/bin/activate
 source .env
 
-python -c "
-from src.agents.market_analyst import MarketAnalyst
-import os
+# Test with default symbols (AAPL, MSFT, GOOGL)
+python scripts/test_market_data.py
 
-ma = MarketAnalyst(
-    'data/agent.db',
-    api_key=os.getenv('ALPACA_API_KEY'),
-    api_secret=os.getenv('ALPACA_SECRET_KEY')
-)
+# Or specify your own symbols
+python scripts/test_market_data.py TSLA NVDA AMD
+```
 
-print('Fetching market data for AAPL, MSFT, NVDA...')
-data = ma.scan_symbols(['AAPL', 'MSFT', 'NVDA'])
+Expected output:
+```
+============================================================
+Market Data Test
+============================================================
+📡 Data source: Alpaca API (with Yahoo Finance fallback)
+🔍 Testing symbols: AAPL, MSFT, GOOGL
+------------------------------------------------------------
 
-for symbol, info in data.items():
-    print(f'{symbol}: \${info[\"price\"]:.2f}, ATR: {info[\"atr\"]:.2f}, Volatile: {info[\"is_volatile\"]}')
-"
+Fetching market data...
+
+Symbol      Price      ATR     SMA-50       Volume Volatile Source
+----------------------------------------------------------------------
+AAPL      $227.63     3.82   $233.49    48,123,456       No Alpaca
+MSFT      $442.15     6.21   $428.92    18,234,567       No Alpaca
+GOOGL     $197.84     4.15   $178.23    22,456,789       No Alpaca
+----------------------------------------------------------------------
+
+✅ Fetched data for 3/3 symbols
 ```
 
 ---
 
 ## Step 9: Run the System
 
-### Option A: Run Full Pipeline (Recommended First Test)
-
 ```bash
 source venv/bin/activate
 source .env
 
 # Pre-market mode (safe - just scans and analyzes)
-python src/main_orchestrator.py --mode premarket
-```
+python scripts/run_system.py premarket
 
-### Option B: Force Market Mode (Generates Recommendations)
+# Market mode (generates recommendations)
+python scripts/run_system.py market
 
-```bash
-python src/main_orchestrator.py --mode market
-```
+# Post-market mode (daily summary)
+python scripts/run_system.py postmarket
 
-### Option C: Post-market Summary
-
-```bash
-python src/main_orchestrator.py --mode postmarket
-```
-
-### Option D: Auto-detect Mode (Production Use)
-
-```bash
-python src/main_orchestrator.py
+# Auto-detect based on time of day
+python scripts/run_system.py
 ```
 
 This automatically selects mode based on current time (Pacific):
@@ -263,51 +277,40 @@ This automatically selects mode based on current time (Pacific):
 
 ## Step 10: View Results
 
-### Check Database for Recommendations
+### Quick Status Check
 
 ```bash
-sqlite3 data/agent.db "
-SELECT symbol, action, confidence, reasoning, datetime(timestamp) as time
-FROM strategy_recommendations
-ORDER BY timestamp DESC
-LIMIT 5;
-"
+python scripts/check_database.py
 ```
 
-### Check Risk Decisions
+This shows portfolio, recommendations, risk decisions, screener results, and news analysis.
+
+### Detailed View
 
 ```bash
-sqlite3 data/agent.db "
-SELECT symbol, action,
-       CASE WHEN approved THEN '✅ Approved' ELSE '❌ Rejected' END as status,
-       reason,
-       datetime(timestamp) as time
-FROM risk_decisions
-ORDER BY timestamp DESC
-LIMIT 5;
-"
+python scripts/check_database.py --full
 ```
 
-### Check News Analysis
+### Test Stock Screener
 
 ```bash
-sqlite3 data/agent.db "
-SELECT symbol, sentiment, confidence, urgency, key_reason, datetime(timestamp) as time
-FROM news_analysis
-ORDER BY timestamp DESC
-LIMIT 5;
-"
+python scripts/test_screener.py
+
+# Or limit results
+python scripts/test_screener.py --max 5
 ```
 
-### Check Screened Stocks
+### Raw SQL Queries (Optional)
 
 ```bash
-sqlite3 data/agent.db "
-SELECT symbol, source, rank, datetime(screening_timestamp) as time
-FROM screener_results
-ORDER BY rank
-LIMIT 10;
-"
+# Check recommendations
+sqlite3 data/agent.db "SELECT symbol, action, confidence FROM strategy_recommendations ORDER BY timestamp DESC LIMIT 5;"
+
+# Check risk decisions
+sqlite3 data/agent.db "SELECT symbol, action, approved, reason FROM risk_decisions ORDER BY timestamp DESC LIMIT 5;"
+
+# Check screened stocks
+sqlite3 data/agent.db "SELECT symbol, source, rank FROM screener_results ORDER BY rank LIMIT 10;"
 ```
 
 ---
@@ -367,27 +370,30 @@ cd /Users/shengpeng/study/repo/my_trading
 source venv/bin/activate
 source .env
 
-# Run system
-python src/main_orchestrator.py --mode premarket   # Safe test
-python src/main_orchestrator.py --mode market      # Get recommendations
-python src/main_orchestrator.py --mode postmarket  # Daily summary
-python src/main_orchestrator.py                    # Auto-detect mode
+# Check configuration
+python scripts/check_config.py
 
-# Import new portfolio
-python -c "
-from src.agents.portfolio_accountant import PortfolioAccountant
-pa = PortfolioAccountant('data/agent.db')
-pa.import_fidelity_csv('inbox/your_file.csv')
-"
+# Import portfolio
+python scripts/import_portfolio.py                 # Latest from inbox/
+python scripts/import_portfolio.py inbox/file.csv  # Specific file
 
-# Check portfolio
-sqlite3 data/agent.db "SELECT * FROM holdings WHERE snapshot_id = (SELECT MAX(id) FROM portfolio_snapshot);"
+# Test market data
+python scripts/test_market_data.py                 # Default symbols
+python scripts/test_market_data.py TSLA NVDA       # Custom symbols
 
-# Check recommendations
-sqlite3 data/agent.db "SELECT * FROM strategy_recommendations ORDER BY timestamp DESC LIMIT 5;"
+# Test stock screener
+python scripts/test_screener.py                    # Find tradeable stocks
+python scripts/test_screener.py --max 5            # Limit results
 
-# Check screened stocks
-sqlite3 data/agent.db "SELECT symbol, source, rank FROM screener_results ORDER BY rank LIMIT 10;"
+# Run trading system
+python scripts/run_system.py premarket             # Safe test
+python scripts/run_system.py market                # Get recommendations
+python scripts/run_system.py postmarket            # Daily summary
+python scripts/run_system.py                       # Auto-detect mode
+
+# Check database status
+python scripts/check_database.py                   # Quick status
+python scripts/check_database.py --full            # Detailed view
 
 # Run tests
 python -m pytest tests/ -v

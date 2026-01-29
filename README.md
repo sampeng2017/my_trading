@@ -460,6 +460,13 @@ my_trading/
 ├── launchd/
 │   └── com.user.stockagent.plist  # macOS scheduler config
 ├── logs/                     # Log output directory
+├── scripts/                  # Helper scripts for common tasks
+│   ├── check_config.py       # Verify configuration
+│   ├── check_database.py     # View database status
+│   ├── import_portfolio.py   # Import Fidelity CSVs
+│   ├── run_system.py         # Run trading system
+│   ├── test_market_data.py   # Test market data fetching
+│   └── test_screener.py      # Test stock screener
 ├── src/
 │   ├── agents/
 │   │   ├── stock_screener.py        # Dynamic stock discovery
