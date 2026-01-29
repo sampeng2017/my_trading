@@ -101,9 +101,31 @@ CREATE TABLE IF NOT EXISTS stock_metadata (
     last_updated DATETIME
 );
 
+-- Screener Results (cached screening outputs)
+CREATE TABLE IF NOT EXISTS screener_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    source TEXT,
+    screening_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    rank INTEGER,
+    score DECIMAL(5, 3),
+    reason TEXT
+);
+
+-- Screener Run Log (audit trail)
+CREATE TABLE IF NOT EXISTS screener_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source TEXT,
+    symbols_found INTEGER,
+    symbols_after_filter INTEGER,
+    error TEXT
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_market_data_symbol ON market_data(symbol, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_news_symbol ON news_analysis(symbol, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_holdings_snapshot ON holdings(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON strategy_recommendations(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp ON portfolio_snapshot(import_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_screener_results_timestamp ON screener_results(screening_timestamp DESC);

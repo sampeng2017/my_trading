@@ -43,19 +43,20 @@ python src/utils/watchdog_csv.py
 
 ### Multi-Agent Pipeline
 
-The system uses a 6-agent architecture with clear separation between deterministic and AI-powered components:
+The system uses a 7-agent architecture with clear separation between deterministic and AI-powered components:
 
 **Data Collection Stage** (all deterministic):
 1. **PortfolioAccountant** (`src/agents/portfolio_accountant.py`) - Parses Fidelity CSV exports, creates portfolio snapshots, infers trades via state diffing
 2. **MarketAnalyst** (`src/agents/market_analyst.py`) - Fetches prices (Alpaca bars → yfinance → Alpaca quotes fallback), calculates ATR and SMA-50, auto-populates stock metadata
 3. **NewsAnalyst** (`src/agents/news_analyst.py`) - Aggregates Finnhub news, AI-powered sentiment analysis (Gemini)
+4. **StockScreener** (`src/agents/stock_screener.py`) - Discovers tradeable stocks dynamically using Alpaca movers API + Alpha Vantage fallback
 
 **Analysis Stage** (AI-powered):
-4. **StrategyPlanner** (`src/agents/strategy_planner.py`) - Synthesizes all inputs using Chain-of-Thought prompting, generates BUY/SELL/HOLD recommendations (Gemini Pro)
+5. **StrategyPlanner** (`src/agents/strategy_planner.py`) - Synthesizes all inputs using Chain-of-Thought prompting, generates BUY/SELL/HOLD recommendations (Gemini Pro)
 
 **Risk & Notification Stage** (deterministic):
-5. **RiskController** (`src/agents/risk_controller.py`) - Enforces hard constraints: cash availability, position size limits (20%), sector exposure caps (40%), volatility filters, liquidity requirements
-6. **NotificationSpecialist** (`src/agents/notification_specialist.py`) - Routes alerts via iMessage (urgent) or email (summaries), respects quiet hours
+6. **RiskController** (`src/agents/risk_controller.py`) - Enforces hard constraints: cash availability, position size limits (20%), sector exposure caps (40%), volatility filters, liquidity requirements
+7. **NotificationSpecialist** (`src/agents/notification_specialist.py`) - Routes alerts via iMessage (urgent) or email (summaries), respects quiet hours
 
 ### Main Entry Point
 
@@ -75,10 +76,11 @@ The system uses a 6-agent architecture with clear separation between determinist
 
 Create `.env` file in project root with API keys:
 ```bash
-export GEMINI_API_KEY="your-key"      # Required for AI
-export ALPACA_API_KEY="your-key"      # Optional (falls back to yfinance)
+export GEMINI_API_KEY="your-key"         # Required for AI
+export ALPACA_API_KEY="your-key"         # Optional (falls back to yfinance)
 export ALPACA_SECRET_KEY="your-key"
-export FINNHUB_API_KEY="your-key"     # Optional (for news)
+export FINNHUB_API_KEY="your-key"        # Optional (for news)
+export ALPHA_VANTAGE_API_KEY="your-key"  # Optional (backup for screener)
 ```
 
 Load before running: `source .env`
@@ -96,10 +98,12 @@ Key settings:
 - `ai.model_sentiment`: gemini-2.0-flash
 - `limits.max_news_articles`: 5 articles per symbol
 - `limits.market_data_ttl_seconds`: 300 (5 min cache)
+- `screener.enabled`: true (dynamic stock discovery)
+- `screener.max_screened_symbols`: 10 symbols from screening
 
 ## Database
 
-**`data/init_schema.sql`** - SQLite schema with 8 tables:
+**`data/init_schema.sql`** - SQLite schema with 10 tables:
 - `portfolio_snapshot` / `holdings`: Portfolio state
 - `market_data`: Price cache with TTL
 - `news_analysis`: Sentiment results
@@ -108,14 +112,17 @@ Key settings:
 - `trade_log`: Inferred trades from portfolio diffs
 - `notification_log`: Delivery history
 - `stock_metadata`: Sector/industry info
+- `screener_results`: Cached screening outputs
+- `screener_runs`: Screening audit trail
 
 ## Workflow
 
 1. Drop Fidelity CSV exports into `inbox/` folder (or use watchdog for auto-import)
 2. PortfolioAccountant imports and snapshots holdings
-3. MarketAnalyst fetches current prices and indicators
-4. NewsAnalyst gathers and analyzes relevant news
-5. StrategyPlanner synthesizes data into recommendations
-6. RiskController validates against constraints
-7. NotificationSpecialist alerts user for approval
-8. User manually executes approved trades
+3. StockScreener discovers additional tradeable stocks (Alpaca movers → Alpha Vantage fallback)
+4. MarketAnalyst fetches current prices and indicators for all symbols
+5. NewsAnalyst gathers and analyzes relevant news
+6. StrategyPlanner synthesizes data into recommendations
+7. RiskController validates against constraints
+8. NotificationSpecialist alerts user for approval
+9. User manually executes approved trades

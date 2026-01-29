@@ -4,6 +4,7 @@ api_keys:
   alpaca_secret_key: "${ALPACA_SECRET_KEY}"
   gemini_api_key: "${GEMINI_API_KEY}"
   finnhub_api_key: "${FINNHUB_API_KEY}"
+  alpha_vantage_api_key: "${ALPHA_VANTAGE_API_KEY}"
 
 # Email Configuration
 email:
@@ -65,4 +66,12 @@ limits:
   max_news_articles: 5             # Articles to analyze per symbol
   notification_truncation: 500     # Max chars for log/display
   market_data_ttl_seconds: 300     # 5 minutes cache validity
+
+# Stock Screener Configuration
+screener:
+  enabled: true                    # Enable dynamic stock discovery
+  max_screened_symbols: 10         # Max symbols to add from screener
+  cache_ttl_seconds: 3600          # 1 hour cache for screening results
+  min_price: 5.0                   # Avoid penny stocks
+  max_price: 500.0                 # Avoid ultra high-priced illiquids
 

@@ -31,6 +31,7 @@ from agents.news_analyst import NewsAnalyst
 from agents.strategy_planner import StrategyPlanner
 from agents.risk_controller import RiskController
 from agents.notification_specialist import NotificationSpecialist
+from agents.stock_screener import StockScreener
 
 # Setup logging
 def setup_logging(log_path: str = None):
@@ -90,7 +91,20 @@ class TradingOrchestrator:
         self.risk = RiskController(self.db_path, self.config)
         
         self.notifier = NotificationSpecialist(self.db_path, self.config)
-        
+
+        # Initialize stock screener (optional)
+        self.screener = None
+        screener_config = self.config.get('screener', {})
+        if screener_config.get('enabled', False):
+            self.screener = StockScreener(
+                db_path=self.db_path,
+                alpaca_key=api_keys.get('alpaca_api_key'),
+                alpaca_secret=api_keys.get('alpaca_secret_key'),
+                alpha_vantage_key=api_keys.get('alpha_vantage_api_key'),
+                config=self.config
+            )
+            logger.info("Stock screener initialized")
+
         # Get timezone
         tz_name = self.config.get('schedule', {}).get('timezone', 'America/Los_Angeles')
         self.tz = pytz.timezone(tz_name)
@@ -231,13 +245,24 @@ class TradingOrchestrator:
     
     def _get_monitoring_symbols(self) -> list:
         """Get list of symbols to monitor."""
-        # Start with watchlist from config
+        # Start with watchlist from config (always monitored)
         symbols = set(self.config.get('watchlist', []))
-        
+
         # Add current portfolio holdings
         holdings = self.portfolio.get_holdings_symbols()
         symbols.update(holdings)
-        
+
+        # Add dynamically screened symbols
+        if self.screener:
+            try:
+                max_screened = self.config.get('screener', {}).get('max_screened_symbols', 10)
+                screened = self.screener.screen_stocks(max_symbols=max_screened)
+                if screened:
+                    logger.info(f"Screener found {len(screened)} additional symbols: {', '.join(screened)}")
+                    symbols.update(screened)
+            except Exception as e:
+                logger.warning(f"Stock screener error: {e}")
+
         return list(symbols)
 
 
