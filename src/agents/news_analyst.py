@@ -49,7 +49,7 @@ class NewsAnalyst:
         if GEMINI_AVAILABLE and gemini_key:
             try:
                 genai.configure(api_key=gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
                 logger.info("Gemini model initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")

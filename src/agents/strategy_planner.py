@@ -43,7 +43,7 @@ class StrategyPlanner:
         if GEMINI_AVAILABLE and gemini_key:
             try:
                 genai.configure(api_key=gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-pro')
+                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
                 logger.info("Gemini Pro model initialized for strategy planning")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")

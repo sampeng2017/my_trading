@@ -192,9 +192,9 @@ class RiskController:
                     'reason': f'Excessive volatility. ATR is {volatility_pct*100:.1f}% of price (max {self.MAX_VOLATILITY_PCT*100:.0f}%)'
                 }
         
-        # Check 6: Liquidity filter
-        avg_volume = context.get('avg_volume', 0)
-        if avg_volume > 0 and avg_volume < self.MIN_LIQUIDITY_VOLUME:
+        # Check 6: Liquidity filter (skip if volume data unavailable)
+        avg_volume = context.get('avg_volume') or 0
+        if avg_volume and avg_volume > 0 and avg_volume < self.MIN_LIQUIDITY_VOLUME:
             return {
                 'approved': False,
                 'reason': f'Low liquidity. Avg volume {avg_volume:,.0f} < required {self.MIN_LIQUIDITY_VOLUME:,.0f}'

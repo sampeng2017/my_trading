@@ -1,6 +1,7 @@
 # Implementation Review: Design vs Reality
 
 **Review Date:** 2026-01-28
+**Last Updated:** 2026-01-28
 **Design Document:** `doc/consolidated_trading_system_design.md`
 **Reviewer:** Claude Code
 
@@ -8,7 +9,19 @@
 
 ## Overall Assessment
 
-The implementation is **well-aligned with the design** in terms of architecture and core functionality. The six-agent system, database schema, and risk management logic closely follow the specification. However, there are notable gaps in testing, and some planned features are incomplete.
+The implementation is **well-aligned with the design** in terms of architecture and core functionality. The six-agent system, database schema, and risk management logic closely follow the specification.
+
+### Fixes Applied (2026-01-28)
+
+| Issue | Resolution |
+|-------|------------|
+| Hardcoded values in agents | ✅ Extracted to `config.yaml` under `limits` section |
+| CSV column validation missing | ✅ Added validation in PortfolioAccountant |
+| Stock metadata not auto-populated | ✅ Added `populate_metadata()` method to MarketAnalyst |
+| Gemini model names outdated | ✅ Updated to `gemini-2.0-flash` |
+| Alpaca free tier no historical bars | ✅ Added quote-only fallback in MarketAnalyst |
+| RiskController crash on None volume | ✅ Fixed null handling in liquidity check |
+| Database missing volume column | ✅ Added to schema |
 
 ---
 
@@ -17,9 +30,9 @@ The implementation is **well-aligned with the design** in terms of architecture 
 | Component | Design Spec | Implementation Status |
 |-----------|-------------|----------------------|
 | **6-Agent Architecture** | Market/News/Portfolio/Strategy/Risk/Notification | All implemented |
-| **Alpaca + yfinance fallback** | Primary: Alpaca, Fallback: Yahoo | Implemented with graceful degradation |
-| **Finnhub News Integration** | News aggregation with symbol filtering | Working with 5-article limit |
-| **Gemini AI Integration** | Flash for sentiment, Pro for strategy | Correct model selection |
+| **Alpaca + yfinance fallback** | Primary: Alpaca, Fallback: Yahoo | Alpaca bars → yfinance → Alpaca quotes |
+| **Finnhub News Integration** | News aggregation with symbol filtering | Working with configurable article limit |
+| **Gemini AI Integration** | Flash for sentiment, Pro for strategy | Using gemini-2.0-flash |
 | **Chain-of-Thought Prompting** | 3-step reasoning (Technical→Sentiment→Risk) | Implemented in StrategyPlanner |
 | **Fixed Fractional Position Sizing** | Risk = Equity × 1.5%, Shares = Risk/RiskPerShare | Exact formula match |
 | **Hard Risk Constraints** | 6 constraints (cash, position, sector, shorting, volatility, liquidity) | All enforced |
@@ -91,16 +104,16 @@ The implementation is **well-aligned with the design** in terms of architecture 
 
 #### Hardcoded Values (should be in config)
 
-| Location | Hardcoded Value |
-|----------|-----------------|
-| `news_analyst.py:178` | `max_articles = 5` |
-| `market_analyst.py:64` | Cache TTL of 300 seconds |
-| `notification_specialist.py:140` | Content truncation at 500 chars |
+| Location | Hardcoded Value | Status |
+|----------|-----------------|--------|
+| `news_analyst.py` | `max_articles = 5` | ✅ Fixed - now from config |
+| `market_analyst.py` | Cache TTL of 300 seconds | ✅ Fixed - now from config |
+| `notification_specialist.py` | Content truncation at 500 chars | ✅ Fixed - now from config |
 
 #### Missing Input Validation
 
-- `portfolio_accountant.py` doesn't validate CSV column existence
-- `risk_controller.py` doesn't handle missing stock_metadata gracefully
+- ~~`portfolio_accountant.py` doesn't validate CSV column existence~~ ✅ Fixed
+- ~~`risk_controller.py` doesn't handle missing stock_metadata gracefully~~ ✅ Fixed (null-safe)
 
 #### Database Connection Management
 
@@ -120,13 +133,13 @@ The implementation is **well-aligned with the design** in terms of architecture 
 
 1. **Add tests for StrategyPlanner** - it's the AI decision-maker with no validation
 2. **Add integration test** - CSV import → Analysis → Recommendation → Risk → Notification
-3. **Pre-populate stock_metadata table** - or auto-fetch sector data from yfinance
+3. ~~**Pre-populate stock_metadata table**~~ ✅ Done - auto-fetches via `MarketAnalyst.populate_metadata()`
 
 ### Medium Priority
 
 4. Implement notification batching for email (as designed)
 5. Add user feedback tracking to improve recommendations over time
-6. Extract hardcoded values to config file
+6. ~~Extract hardcoded values to config file~~ ✅ Done - `limits` section in config.yaml
 7. Implement consistent logging across all agents
 
 ### Low Priority

@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS market_data (
     sma_50 DECIMAL(10, 4),
     volume INTEGER,  -- Average daily volume for liquidity check
     is_volatile INTEGER DEFAULT 0,
-    source TEXT CHECK(source IN ('Alpaca', 'YFinance', 'Manual'))
+    source TEXT CHECK(source IN ('Alpaca', 'Alpaca-Quote', 'YFinance', 'Manual'))
 );
 
 -- News Analysis (parsed news with sentiment)

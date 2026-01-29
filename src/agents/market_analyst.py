@@ -88,18 +88,23 @@ class MarketAnalyst:
     def _analyze_symbol(self, symbol: str) -> Optional[Dict]:
         """
         Analyze a single symbol.
-        
+
         Returns dict with price, atr, sma_50, is_volatile, timestamp
         """
-        # Try Alpaca first, then yfinance
+        df = None
+
+        # Try Alpaca historical data first
         if self.alpaca_client:
             df = self._fetch_alpaca_data(symbol)
-        elif YFINANCE_AVAILABLE:
+
+        # Fallback to yfinance if Alpaca bars unavailable
+        if (df is None or df.empty) and YFINANCE_AVAILABLE:
             df = self._fetch_yfinance_data(symbol)
-        else:
-            logger.error("No data source available")
-            return None
-        
+
+        # Final fallback: use Alpaca quote for price only (no indicators)
+        if (df is None or df.empty) and self.alpaca_client:
+            return self._fetch_alpaca_quote_only(symbol)
+
         if df is None or df.empty:
             logger.warning(f"No data available for {symbol}")
             return None
@@ -185,7 +190,42 @@ class MarketAnalyst:
         except Exception as e:
             logger.error(f"yfinance fetch error for {symbol}: {e}")
             return None
-    
+
+    def _fetch_alpaca_quote_only(self, symbol: str) -> Optional[Dict]:
+        """
+        Fallback: fetch just the latest quote from Alpaca when historical data unavailable.
+        Returns basic metrics without ATR/SMA (requires paid subscription for bars).
+        """
+        if not self.alpaca_client:
+            return None
+
+        try:
+            request = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
+            quote = self.alpaca_client.get_stock_latest_quote(request)
+
+            if symbol not in quote:
+                return None
+
+            q = quote[symbol]
+            # Use midpoint of bid/ask as price
+            price = (q.bid_price + q.ask_price) / 2 if q.bid_price and q.ask_price else q.ask_price
+
+            logger.info(f"Using Alpaca quote for {symbol}: ${price:.2f} (no historical data)")
+
+            return {
+                'price': float(price),
+                'atr': None,  # Can't calculate without historical data
+                'sma_50': None,
+                'is_volatile': False,  # Unknown without historical data
+                'avg_volume': None,
+                'source': 'Alpaca-Quote',
+                'timestamp': datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Alpaca quote error for {symbol}: {e}")
+            return None
+
     def _calculate_atr(self, df: pd.DataFrame, period: int = 14) -> Optional[float]:
         """
         Calculate Average True Range.
