@@ -40,6 +40,7 @@ class RiskController:
         self.MAX_VOLATILITY_PCT = 0.10  # 10% ATR relative to price
         self.RISK_PER_TRADE_PCT = 0.015  # 1.5% of equity at risk per trade
         self.STOP_LOSS_ATR_MULTIPLIER = 2.5  # 2.5x ATR for stops
+        self.MIN_LIQUIDITY_VOLUME = 200000  # Minimum avg daily volume (200k shares)
         
         # Apply config overrides if provided
         if config:
@@ -49,6 +50,7 @@ class RiskController:
             self.MAX_VOLATILITY_PCT = risk_config.get('max_volatility_pct', self.MAX_VOLATILITY_PCT)
             self.RISK_PER_TRADE_PCT = risk_config.get('risk_per_trade_pct', self.RISK_PER_TRADE_PCT)
             self.STOP_LOSS_ATR_MULTIPLIER = risk_config.get('stop_loss_atr_multiplier', self.STOP_LOSS_ATR_MULTIPLIER)
+            self.MIN_LIQUIDITY_VOLUME = risk_config.get('min_liquidity_volume', self.MIN_LIQUIDITY_VOLUME)
     
     def validate_trade(self, recommendation: Dict) -> Dict:
         """
@@ -190,6 +192,14 @@ class RiskController:
                     'reason': f'Excessive volatility. ATR is {volatility_pct*100:.1f}% of price (max {self.MAX_VOLATILITY_PCT*100:.0f}%)'
                 }
         
+        # Check 6: Liquidity filter
+        avg_volume = context.get('avg_volume', 0)
+        if avg_volume > 0 and avg_volume < self.MIN_LIQUIDITY_VOLUME:
+            return {
+                'approved': False,
+                'reason': f'Low liquidity. Avg volume {avg_volume:,.0f} < required {self.MIN_LIQUIDITY_VOLUME:,.0f}'
+            }
+        
         # All checks passed!
         return {
             'approved': True,
@@ -230,9 +240,9 @@ class RiskController:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get market data
+        # Get market data (price, atr, volume)
         cursor.execute("""
-            SELECT price, atr
+            SELECT price, atr, volume
             FROM market_data
             WHERE symbol = ?
             ORDER BY timestamp DESC
@@ -286,6 +296,7 @@ class RiskController:
         return {
             'price': market[0] if market else 0,
             'atr': market[1] if market else 0,
+            'avg_volume': market[2] if market and len(market) > 2 else 0,
             'portfolio_equity': portfolio[0] if portfolio else 10000,
             'cash_balance': portfolio[1] if portfolio else 10000,
             'current_quantity': position[0] if position else 0,

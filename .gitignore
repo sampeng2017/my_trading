@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs/
+*.log
+
+# Database
+data/*.db
+data/backups/
+
+# Sensitive files - NEVER commit these!
+*.pem
+*.key
+secrets.yaml
+.env
+
+# Local config overrides
+config/local.yaml
+config/secrets.yaml
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Inbox CSVs (contain portfolio data)
+inbox/*.csv
+!inbox/sample_portfolio.csv
+
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints/

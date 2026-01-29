@@ -48,6 +48,7 @@ def temp_db():
             price DECIMAL(10, 4),
             atr DECIMAL(10, 4),
             sma_50 DECIMAL(10, 4),
+            volume INTEGER,
             is_volatile INTEGER DEFAULT 0,
             source TEXT
         );
@@ -105,22 +106,22 @@ def setup_portfolio(temp_db):
         VALUES (?, 'MSFT', 5, 400.00, 2000.00)
     """, (snapshot_id,))
     
-    # Add market data
+    # Add market data (volume > 200,000 for liquidity check to pass)
     cursor.execute("""
-        INSERT INTO market_data (symbol, price, atr, sma_50, is_volatile)
-        VALUES ('AAPL', 150.00, 3.00, 145.00, 0)
+        INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile)
+        VALUES ('AAPL', 150.00, 3.00, 145.00, 50000000, 0)
     """)
     cursor.execute("""
-        INSERT INTO market_data (symbol, price, atr, sma_50, is_volatile)
-        VALUES ('MSFT', 400.00, 8.00, 390.00, 0)
+        INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile)
+        VALUES ('MSFT', 400.00, 8.00, 390.00, 25000000, 0)
     """)
     cursor.execute("""
-        INSERT INTO market_data (symbol, price, atr, sma_50, is_volatile)
-        VALUES ('TSLA', 200.00, 5.00, 190.00, 0)
+        INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile)
+        VALUES ('TSLA', 200.00, 5.00, 190.00, 30000000, 0)
     """)
     cursor.execute("""
-        INSERT INTO market_data (symbol, price, atr, sma_50, is_volatile)
-        VALUES ('HIGH_VOL', 100.00, 15.00, 95.00, 1)
+        INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile)
+        VALUES ('HIGH_VOL', 100.00, 15.00, 95.00, 500000, 1)
     """)
     
     # Add sector metadata

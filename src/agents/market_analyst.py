@@ -124,12 +124,18 @@ class MarketAnalyst:
             if recent_range > (2 * atr):
                 is_volatile = True
         
+        # Calculate 20-day average volume for liquidity check
+        avg_volume = None
+        if 'Volume' in df.columns and len(df) >= 20:
+            avg_volume = int(df['Volume'].tail(20).mean())
+        
         source = 'Alpaca' if self.alpaca_client else 'YFinance'
         
         return {
             'price': current_price,
             'atr': atr,
             'sma_50': sma_50,
+            'avg_volume': avg_volume,
             'is_volatile': is_volatile,
             'source': source,
             'timestamp': datetime.now().isoformat()
@@ -234,13 +240,14 @@ class MarketAnalyst:
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO market_data (symbol, price, atr, sma_50, is_volatile, timestamp, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile, timestamp, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             symbol.upper(),
             metrics['price'],
             metrics.get('atr'),
             metrics.get('sma_50'),
+            metrics.get('avg_volume'),
             1 if metrics.get('is_volatile') else 0,
             metrics['timestamp'],
             metrics.get('source', 'Unknown')

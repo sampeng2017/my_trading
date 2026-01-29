@@ -24,6 +24,7 @@ risk:
   risk_per_trade_pct: 0.015        # 1.5% portfolio risk per trade
   max_volatility_pct: 0.10         # 10% ATR relative to price
   stop_loss_atr_multiplier: 2.5    # 2.5x ATR for stops
+  min_liquidity_volume: 200000     # 200k shares min average daily volume
 
 # Schedule Configuration
 schedule:
