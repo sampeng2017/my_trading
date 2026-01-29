@@ -1,0 +1,5 @@
+Account Number,Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Cost Basis Per Share,Unrealized Gain/Loss,Unrealized Gain/Loss %,Type
+Z12345678,Individual,AAPL,APPLE INC,50,178.45,8922.50,8500.00,170.00,422.50,4.97,Cash
+Z12345678,Individual,MSFT,MICROSOFT CORP,20,380.20,7604.00,7200.00,360.00,404.00,5.61,Cash
+Z12345678,Individual,NVDA,NVIDIA CORP,10,450.00,4500.00,4000.00,400.00,500.00,12.50,Cash
+Z12345678,Individual,SPAXX,FIDELITY GOVERNMENT MONEY MARKET,3500.00,1.00,3500.00,3500.00,1.00,0.00,0.00,Cash

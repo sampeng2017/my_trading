@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" 
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Label (must match filename without .plist) -->
+    <key>Label</key>
+    <string>com.user.stockagent</string>
+    
+    <!-- Program to run -->
+    <key>ProgramArguments</key>
+    <array>
+        <!-- UPDATE THIS PATH to your actual venv location -->
+        <string>/Users/YOUR_USERNAME/study/repo/my_trading/venv/bin/python3</string>
+        <string>/Users/YOUR_USERNAME/study/repo/my_trading/src/main_orchestrator.py</string>
+    </array>
+    
+    <!-- Environment Variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/YOUR_USERNAME/study/repo/my_trading</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        
+        <!-- API Keys - SET THESE -->
+        <key>ALPACA_API_KEY</key>
+        <string>YOUR_ALPACA_API_KEY</string>
+        <key>ALPACA_SECRET_KEY</key>
+        <string>YOUR_ALPACA_SECRET_KEY</string>
+        <key>GEMINI_API_KEY</key>
+        <string>YOUR_GEMINI_API_KEY</string>
+        <key>FINNHUB_API_KEY</key>
+        <string>YOUR_FINNHUB_API_KEY</string>
+        
+        <!-- Email Settings -->
+        <key>GMAIL_USER</key>
+        <string>your_email@gmail.com</string>
+        <key>GMAIL_APP_PASSWORD</key>
+        <string>YOUR_APP_PASSWORD</string>
+        <key>EMAIL_RECIPIENT</key>
+        <string>your_email@gmail.com</string>
+        
+        <!-- iMessage -->
+        <key>IMESSAGE_RECIPIENT</key>
+        <string>+1234567890</string>
+    </dict>
+    
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/study/repo/my_trading/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/study/repo/my_trading/logs/stderr.log</string>
+    
+    <!-- Schedule: Run at specific times -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <!-- Pre-market: 6:00 AM -->
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Market open: 6:30 AM -->
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <!-- Mid-morning: 9:00 AM -->
+        <dict>
+            <key>Hour</key><integer>9</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Mid-day: 11:00 AM -->
+        <dict>
+            <key>Hour</key><integer>11</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- Post-market: 1:00 PM -->
+        <dict>
+            <key>Hour</key><integer>13</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+    
+    <!-- Working Directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/YOUR_USERNAME/study/repo/my_trading</string>
+    
+    <!-- Don't run at system boot, only on schedule -->
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <!-- Don't keep retrying if it fails -->
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
