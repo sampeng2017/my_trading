@@ -39,7 +39,7 @@ class MarketAnalyst:
     """Agent responsible for market data analysis and technical indicators."""
     
     def __init__(self, db_path: str, api_key: Optional[str] = None, 
-                 api_secret: Optional[str] = None):
+                 api_secret: Optional[str] = None, config: Optional[Dict] = None):
         """
         Initialize Market Analyst.
         
@@ -47,10 +47,12 @@ class MarketAnalyst:
             db_path: Path to SQLite database
             api_key: Alpaca API key (optional, can use yfinance as fallback)
             api_secret: Alpaca API secret
+            config: Configuration dict (optional)
         """
         self.db_path = db_path
         self.api_key = api_key
         self.api_secret = api_secret
+        self.config = config or {}
         
         self.alpaca_client = None
         if ALPACA_AVAILABLE and api_key and api_secret:
@@ -283,7 +285,8 @@ class MarketAnalyst:
             # Check if cache is recent (within 5 minutes)
             try:
                 cache_time = datetime.fromisoformat(timestamp)
-                if datetime.now() - cache_time < timedelta(minutes=5):
+                ttl = self.config.get('limits', {}).get('market_data_ttl_seconds', 300)
+                if datetime.now() - cache_time < timedelta(seconds=ttl):
                     return price
             except:
                 pass
@@ -330,3 +333,47 @@ class MarketAnalyst:
             return "Trending Down"
         else:
             return "Ranging"
+    
+    def populate_metadata(self, symbols: List[str]):
+        """
+        Fetch and store sector/industry metadata for symbols.
+        Crucial for RiskController sector exposure checks.
+        """
+        if not YFINANCE_AVAILABLE:
+            logger.warning("yfinance not available for metadata population")
+            return
+            
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        count = 0
+        for symbol in symbols:
+            try:
+                # Check if already exists and recent
+                cursor.execute("SELECT last_updated FROM stock_metadata WHERE symbol = ?", (symbol,))
+                row = cursor.fetchone()
+                if row:
+                    continue  # Skip existing
+                
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                
+                sector = info.get('sector', 'Unknown')
+                industry = info.get('industry', 'Unknown')
+                name = info.get('longName', symbol)
+                avg_vol = info.get('averageVolume', 0)
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO stock_metadata 
+                    (symbol, name, sector, industry, avg_volume_20d, last_updated)
+                    VALUES (?, ?, ?, ?, ?, datetime('now'))
+                """, (symbol, name, sector, industry, avg_vol))
+                
+                count += 1
+                
+            except Exception as e:
+                logger.error(f"Error fetching metadata for {symbol}: {e}")
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"Populated metadata for {count} new symbols")

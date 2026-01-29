@@ -30,7 +30,7 @@ class NewsAnalyst:
     """Agent responsible for news aggregation and sentiment analysis."""
     
     def __init__(self, db_path: str, finnhub_key: Optional[str] = None,
-                 gemini_key: Optional[str] = None):
+                 gemini_key: Optional[str] = None, config: Optional[Dict] = None):
         """
         Initialize News Analyst.
         
@@ -38,9 +38,11 @@ class NewsAnalyst:
             db_path: Path to SQLite database
             finnhub_key: Finnhub API key (optional)
             gemini_key: Google Gemini API key (optional)
+            config: Configuration dict (optional)
         """
         self.db_path = db_path
         self.finnhub_key = finnhub_key
+        self.config = config or {}
         self.gemini_model = None
         
         # Configure Gemini if available
@@ -86,7 +88,8 @@ class NewsAnalyst:
                 if response.status_code == 200:
                     news_items = response.json()
                     
-                    for item in news_items[:5]:  # Limit to 5 per symbol
+                    max_articles = self.config.get('limits', {}).get('max_news_articles', 5)
+                    for item in news_items[:max_articles]:  # Limit per symbol
                         all_news.append({
                             'symbol': symbol,
                             'headline': item.get('headline'),

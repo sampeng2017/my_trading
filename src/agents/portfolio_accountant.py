@@ -68,6 +68,13 @@ class PortfolioAccountant:
         # Normalize column names (handle variations)
         df.columns = df.columns.str.strip()
         
+        # Validate required columns
+        required_columns = {'Symbol', 'Current Value', 'Quantity'}
+        missing = required_columns - set(df.columns)
+        if missing:
+            logger.error(f"CSV missing required columns: {missing}")
+            raise ValueError(f"Invalid Fidelity CSV format. Missing: {missing}")
+        
         # Create new snapshot
         snapshot_id = self._create_snapshot()
         

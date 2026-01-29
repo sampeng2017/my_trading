@@ -71,13 +71,15 @@ class TradingOrchestrator:
         self.market = MarketAnalyst(
             self.db_path,
             api_key=api_keys.get('alpaca_api_key'),
-            api_secret=api_keys.get('alpaca_secret_key')
+            api_secret=api_keys.get('alpaca_secret_key'),
+            config=self.config
         )
         
         self.news = NewsAnalyst(
             self.db_path,
             finnhub_key=api_keys.get('finnhub_api_key'),
-            gemini_key=api_keys.get('gemini_api_key')
+            gemini_key=api_keys.get('gemini_api_key'),
+            config=self.config
         )
         
         self.strategy = StrategyPlanner(
@@ -139,6 +141,10 @@ class TradingOrchestrator:
         # Get symbols to monitor
         symbols = self._get_monitoring_symbols()
         logger.info(f"Monitoring {len(symbols)} symbols: {', '.join(symbols)}")
+        
+        # Ensure metadata is populated (sectors/industries for risk)
+        logger.info("Populating stock metadata...")
+        self.market.populate_metadata(symbols)
         
         # Fetch market data
         logger.info("Fetching market data...")

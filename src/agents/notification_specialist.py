@@ -231,7 +231,7 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
             INSERT INTO notification_log
             (channel, content, status, timestamp)
             VALUES (?, ?, ?, datetime('now'))
-        """, (channel, content[:500], status))
+        """, (channel, content[:self.config.get('limits', {}).get('notification_truncation', 500)], status))
         
         conn.commit()
         conn.close()
