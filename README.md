@@ -24,8 +24,9 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 ## Features
 
+- **Dynamic Stock Discovery**: Automatic screening for tradeable stocks via Alpaca movers + Alpha Vantage fallback
 - **Portfolio Tracking**: Automatic import of Fidelity CSV exports with trade inference via state diffing
-- **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA, RSI)
+- **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA)
 - **AI-Powered Insights**: Gemini AI for news sentiment analysis and strategy recommendations
 - **Risk Management**: Deterministic position sizing, volatility filters, and sector exposure limits
 - **Smart Notifications**: iMessage for urgent alerts, email for daily summaries
@@ -41,27 +42,19 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 │              (Time-based mode: premarket/market/postmarket)      │
 └─────────────────────────────────────────────────────────────────┘
                                  │
-        ┌────────────────────────┼────────────────────────┐
-        ▼                        ▼                        ▼
-┌──────────────┐        ┌──────────────┐        ┌──────────────┐
-│   Portfolio  │        │    Market    │        │     News     │
-│  Accountant  │        │   Analyst    │        │   Analyst    │
-│              │        │              │        │              │
-│ • CSV Import │        │ • Prices     │        │ • Finnhub    │
-│ • Holdings   │        │ • ATR/SMA    │        │ • Gemini AI  │
-│ • Diffing    │        │ • Volatility │        │ • Sentiment  │
-└──────┬───────┘        └──────┬───────┘        └──────┬───────┘
-       │                       │                       │
-       └───────────────────────┼───────────────────────┘
+   ┌─────────────┬───────────────┼───────────────┬─────────────┐
+   ▼             ▼               ▼               ▼             ▼
+┌────────┐ ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐
+│ Stock  │ │Portfolio │   │  Market  │   │   News   │   │Strategy│
+│Screener│ │Accountant│   │ Analyst  │   │ Analyst  │   │Planner │
+│        │ │          │   │          │   │          │   │        │
+│• Alpaca│ │• CSV     │   │• Prices  │   │• Finnhub │   │• CoT   │
+│• Alpha │ │• Holdings│   │• ATR/SMA │   │• Gemini  │   │• Recom │
+│  Vantage│ │• Diffing │   │• Volume  │   │• Sentiment│   │• Score │
+└────┬───┘ └────┬─────┘   └────┬─────┘   └────┬─────┘   └───┬────┘
+     │          │              │              │             │
+     └──────────┴──────────────┼──────────────┴─────────────┘
                                ▼
-                    ┌──────────────────┐
-                    │  Strategy Planner │
-                    │                   │
-                    │ • Chain-of-Thought│
-                    │ • BUY/SELL/HOLD   │
-                    │ • Confidence Score│
-                    └─────────┬─────────┘
-                              ▼
                     ┌──────────────────┐
                     │  Risk Controller  │
                     │                   │
@@ -83,6 +76,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 | Agent | Responsibility | AI/Deterministic |
 |-------|---------------|------------------|
+| **Stock Screener** | Discovers tradeable stocks via Alpaca movers + Alpha Vantage | Deterministic |
 | **Portfolio Accountant** | Parses Fidelity CSVs, tracks holdings, infers trades | Deterministic |
 | **Market Analyst** | Fetches prices, calculates ATR/SMA, detects volatility | Deterministic |
 | **News Analyst** | Aggregates news, extracts sentiment via Gemini AI | AI-Powered |
@@ -92,7 +86,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 ### Database Schema
 
-SQLite database with 8 tables:
+SQLite database with 10 tables:
 - `portfolio_snapshot` / `holdings` - Portfolio state
 - `market_data` - Price cache with TTL
 - `news_analysis` - Sentiment results
@@ -101,6 +95,8 @@ SQLite database with 8 tables:
 - `trade_log` - Inferred trades
 - `notification_log` - Delivery history
 - `stock_metadata` - Sector/industry info
+- `screener_results` - Cached screening outputs
+- `screener_runs` - Screening audit trail
 
 ---
 
@@ -110,9 +106,10 @@ SQLite database with 8 tables:
 |-----------|------------|
 | Language | Python 3.10+ |
 | Database | SQLite |
-| Market Data | Yahoo Finance (free), Alpaca API (optional) |
+| Market Data | Alpaca API → Yahoo Finance → Alpaca Quotes (fallback chain) |
+| Stock Screening | Alpaca Movers API → Alpha Vantage (fallback) |
 | News Data | Finnhub API |
-| AI | Google Gemini (gemini-1.5-flash, gemini-1.5-pro) |
+| AI | Google Gemini (gemini-2.0-flash) |
 | Notifications | macOS Messages (AppleScript), Gmail SMTP |
 | Scheduling | macOS launchd |
 | File Watching | watchdog library |
@@ -124,7 +121,8 @@ SQLite database with 8 tables:
 - **macOS** 12.0+ (for iMessage via AppleScript)
 - **Python** 3.10 or higher
 - **API Keys** (optional but recommended):
-  - [Alpaca](https://alpaca.markets/) - Real-time market data
+  - [Alpaca](https://alpaca.markets/) - Market data + stock screening
+  - [Alpha Vantage](https://www.alphavantage.co/) - Backup screener (free: 25/day)
   - [Finnhub](https://finnhub.io/) - News aggregation
   - [Google Gemini](https://ai.google.dev/) - AI analysis
   - Gmail App Password - Email notifications
@@ -189,9 +187,12 @@ Add to your `~/.zshrc` or `~/.bash_profile`:
 # Required for AI features
 export GEMINI_API_KEY="your_gemini_api_key"
 
-# Optional: Better market data
+# Optional: Market data + stock screening
 export ALPACA_API_KEY="your_alpaca_key"
 export ALPACA_SECRET_KEY="your_alpaca_secret"
+
+# Optional: Backup stock screener (25 calls/day free)
+export ALPHA_VANTAGE_API_KEY="your_alpha_vantage_key"
 
 # Optional: News aggregation
 export FINNHUB_API_KEY="your_finnhub_key"
@@ -219,6 +220,7 @@ The config file uses environment variable substitution. Key settings:
 api_keys:
   alpaca_api_key: "${ALPACA_API_KEY}"
   gemini_api_key: "${GEMINI_API_KEY}"
+  alpha_vantage_api_key: "${ALPHA_VANTAGE_API_KEY}"
 
 # Risk Parameters (adjust to your risk tolerance)
 risk:
@@ -227,7 +229,13 @@ risk:
   risk_per_trade_pct: 0.015      # Risk 1.5% per trade
   stop_loss_atr_multiplier: 2.5  # Stop at 2.5x ATR
 
-# Watchlist (stocks to monitor beyond holdings)
+# Stock Screener (dynamic stock discovery)
+screener:
+  enabled: true                  # Enable dynamic screening
+  max_screened_symbols: 10       # Max symbols to add
+  cache_ttl_seconds: 3600        # 1-hour cache
+
+# Watchlist (always monitored, in addition to screened stocks)
 watchlist:
   - AAPL
   - MSFT
@@ -454,6 +462,7 @@ my_trading/
 ├── logs/                     # Log output directory
 ├── src/
 │   ├── agents/
+│   │   ├── stock_screener.py        # Dynamic stock discovery
 │   │   ├── portfolio_accountant.py
 │   │   ├── market_analyst.py
 │   │   ├── news_analyst.py
