@@ -23,6 +23,15 @@ The implementation is **well-aligned with the design** in terms of architecture 
 | RiskController crash on None volume | ✅ Fixed null handling in liquidity check |
 | Database missing volume column | ✅ Added to schema |
 
+### Updates (2026-01-29)
+
+| Feature | Change |
+|---------|--------|
+| **LLM Enhanced Screener** | Implemented intelligent re-ranking using Gemini AI |
+| **Model Upgrade** | Switched all AI agents to `gemini-2.5-flash` |
+| **Configuration** | Added `python-dotenv` for auto-loading environment variables |
+| **Robustness** | Added regex fallback for JSON parsing and missing price handling |
+
 ---
 
 ## Fully Implemented (Matches Design)
@@ -44,7 +53,7 @@ The implementation is **well-aligned with the design** in terms of architecture 
 | **SQLite Database** | 8 tables with indexes | Schema matches design |
 | **YAML Config with Env Vars** | `${VAR_NAME}` substitution | Implemented |
 | **CSV Watchdog** | Auto-import Fidelity exports | With archiving |
-| **State Diffing** | Infer trades from snapshot comparison | BUY/SELL detection |
+| **Stock Screener** | Discovers tradeable stocks via Alpaca movers + Alpha Vantage | **AI-Enhanced** (LLM Re-ranking) |
 | **Audit Trail** | All decisions logged with timestamps | Comprehensive |
 
 ---

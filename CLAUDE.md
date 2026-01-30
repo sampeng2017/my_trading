@@ -37,6 +37,14 @@ python src/test_phase1.py
 
 # CSV watchdog (auto-import Fidelity CSVs from inbox/)
 python src/utils/watchdog_csv.py
+
+# Helper scripts (in scripts/ folder)
+python scripts/check_config.py       # Verify API keys and setup
+python scripts/import_portfolio.py   # Import Fidelity CSV
+python scripts/test_market_data.py   # Test price fetching
+python scripts/test_screener.py      # Test stock screener + LLM ranking
+python scripts/check_database.py     # View database status
+python scripts/run_system.py         # Run trading system
 ```
 
 ## Architecture
@@ -49,7 +57,7 @@ The system uses a 7-agent architecture with clear separation between determinist
 1. **PortfolioAccountant** (`src/agents/portfolio_accountant.py`) - Parses Fidelity CSV exports, creates portfolio snapshots, infers trades via state diffing
 2. **MarketAnalyst** (`src/agents/market_analyst.py`) - Fetches prices (Alpaca bars → yfinance → Alpaca quotes fallback), calculates ATR and SMA-50, auto-populates stock metadata
 3. **NewsAnalyst** (`src/agents/news_analyst.py`) - Aggregates Finnhub news, AI-powered sentiment analysis (Gemini)
-4. **StockScreener** (`src/agents/stock_screener.py`) - Discovers tradeable stocks dynamically using Alpaca movers API + Alpha Vantage fallback
+4. **StockScreener** (`src/agents/stock_screener.py`) - Discovers tradeable stocks dynamically using Alpaca movers API + Alpha Vantage fallback, with optional LLM re-ranking via Gemini
 
 **Analysis Stage** (AI-powered):
 5. **StrategyPlanner** (`src/agents/strategy_planner.py`) - Synthesizes all inputs using Chain-of-Thought prompting, generates BUY/SELL/HOLD recommendations (Gemini Pro)
@@ -94,12 +102,13 @@ Key settings:
 - `risk.max_sector_exposure_pct`: 40% max per sector
 - `risk.min_liquidity_volume`: 200k shares minimum average daily volume
 - `schedule.timezone`: Pacific Time default
-- `ai.model_strategy`: gemini-2.0-flash
-- `ai.model_sentiment`: gemini-2.0-flash
+- `ai.model_strategy`: gemini-2.5-flash
+- `ai.model_sentiment`: gemini-2.5-flash
 - `limits.max_news_articles`: 5 articles per symbol
 - `limits.market_data_ttl_seconds`: 300 (5 min cache)
 - `screener.enabled`: true (dynamic stock discovery)
 - `screener.max_screened_symbols`: 10 symbols from screening
+- `screener.use_llm_ranking`: true (AI-powered re-ranking)
 
 ## Database
 

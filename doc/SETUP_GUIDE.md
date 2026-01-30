@@ -117,7 +117,7 @@ EOF
 
 **Important:** Replace the placeholder values with your actual keys!
 
-Load the environment:
+Load the environment (scripts will auto-load this, but good for testing):
 ```bash
 source .env
 ```
@@ -298,6 +298,13 @@ python scripts/test_screener.py
 
 # Or limit results
 python scripts/test_screener.py --max 5
+```
+
+**Check for AI Logs:**
+If configured correctly, you should see logs indicating intelligent re-ranking:
+```
+INFO - Using LLM to re-rank top 10 candidates
+INFO - LLM Rank #1: AAPL - Strong breakout setup...
 ```
 
 ### Raw SQL Queries (Optional)

@@ -24,10 +24,10 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 ## Features
 
-- **Dynamic Stock Discovery**: Automatic screening for tradeable stocks via Alpaca movers + Alpha Vantage fallback
+- **Dynamic Stock Discovery**: Automatic screening via Alpaca/Alpha Vantage + **LLM Re-ranking**
 - **Portfolio Tracking**: Automatic import of Fidelity CSV exports with trade inference via state diffing
 - **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA)
-- **AI-Powered Insights**: Gemini AI for news sentiment analysis and strategy recommendations
+- **AI-Powered Insights**: Gemini AI for news sentiment, strategy recommendations, and **screener ranking**
 - **Risk Management**: Deterministic position sizing, volatility filters, and sector exposure limits
 - **Smart Notifications**: iMessage for urgent alerts, email for daily summaries
 - **macOS Automation**: `launchd` scheduling and file system watchdog for automatic imports
@@ -47,10 +47,10 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 ┌────────┐ ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐
 │ Stock  │ │Portfolio │   │  Market  │   │   News   │   │Strategy│
 │Screener│ │Accountant│   │ Analyst  │   │ Analyst  │   │Planner │
-│        │ │          │   │          │   │          │   │        │
+│(AI)    │ │          │   │          │   │          │   │        │
 │• Alpaca│ │• CSV     │   │• Prices  │   │• Finnhub │   │• CoT   │
-│• Alpha │ │• Holdings│   │• ATR/SMA │   │• Gemini  │   │• Recom │
-│  Vantage│ │• Diffing │   │• Volume  │   │• Sentiment│   │• Score │
+│• Gemini│ │• Holdings│   │• ATR/SMA │   │• Gemini  │   │• Recom │
+│• Rank  │ │• Diffing │   │• Volume  │   │• Sentiment│   │• Score │
 └────┬───┘ └────┬─────┘   └────┬─────┘   └────┬─────┘   └───┬────┘
      │          │              │              │             │
      └──────────┴──────────────┼──────────────┴─────────────┘
@@ -76,7 +76,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 | Agent | Responsibility | AI/Deterministic |
 |-------|---------------|------------------|
-| **Stock Screener** | Discovers tradeable stocks via Alpaca movers + Alpha Vantage | Deterministic |
+| **Stock Screener** | Discovers stocks via Alpaca movers, then **re-ranks using Gemini AI** | **AI-Enhanced** |
 | **Portfolio Accountant** | Parses Fidelity CSVs, tracks holdings, infers trades | Deterministic |
 | **Market Analyst** | Fetches prices, calculates ATR/SMA, detects volatility | Deterministic |
 | **News Analyst** | Aggregates news, extracts sentiment via Gemini AI | AI-Powered |
@@ -107,9 +107,9 @@ SQLite database with 10 tables:
 | Language | Python 3.10+ |
 | Database | SQLite |
 | Market Data | Alpaca API → Yahoo Finance → Alpaca Quotes (fallback chain) |
-| Stock Screening | Alpaca Movers API → Alpha Vantage (fallback) |
+| Stock Screening | Alpaca Movers API → Alpha Vantage → **Gemini AI Re-ranking** |
 | News Data | Finnhub API |
-| AI | Google Gemini (gemini-2.0-flash) |
+| AI | Google Gemini (gemini-2.5-flash) |
 | Notifications | macOS Messages (AppleScript), Gmail SMTP |
 | Scheduling | macOS launchd |
 | File Watching | watchdog library |
@@ -162,6 +162,7 @@ PyYAML>=6.0            # Configuration
 yfinance>=0.2.0        # Yahoo Finance fallback
 pytz>=2023.3           # Timezone handling
 pytest>=7.4.0          # Testing
+python-dotenv>=1.0.0   # Environment variables
 ```
 
 ### 4. Initialize Database
@@ -234,6 +235,11 @@ screener:
   enabled: true                  # Enable dynamic screening
   max_screened_symbols: 10       # Max symbols to add
   cache_ttl_seconds: 3600        # 1-hour cache
+  
+  # LLM Re-ranking (intelligent ranking)
+  use_llm_ranking: true          # Enable AI analysis
+  llm_candidate_pool: 10         # Stocks to analyze
+  model_screening: "gemini-2.5-flash"
 
 # Watchlist (always monitored, in addition to screened stocks)
 watchlist:
