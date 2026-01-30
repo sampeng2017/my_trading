@@ -13,6 +13,9 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import logging
+import time
+
+from utils.gemini_client import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -73,34 +76,28 @@ class StrategyPlanner:
         # Construct prompt
         prompt = self._build_cot_prompt(symbol, context)
         
-        try:
-            # Call Gemini
-            response = self.gemini_model.generate_content(
+        def make_call():
+            return self.gemini_model.generate_content(
                 prompt,
                 generation_config=genai.GenerationConfig(
-                    temperature=0.3,  # Moderate randomness for creativity
+                    temperature=0.3,
                     max_output_tokens=1000
                 )
             )
-            
-            # Parse response
+        
+        response = call_with_retry(make_call, context=symbol)
+        
+        if response:
             result = self._parse_json_response(response.text)
-            
             if result:
                 result['symbol'] = symbol
                 result['timestamp'] = datetime.now().isoformat()
-                
-                # Log to database
                 self._write_to_db(result)
-                
                 return result
             else:
                 logger.warning(f"Failed to parse recommendation for {symbol}")
-                return self._fallback_recommendation(symbol, context)
-                
-        except Exception as e:
-            logger.error(f"Strategy generation error for {symbol}: {e}")
-            return self._fallback_recommendation(symbol, context)
+        
+        return self._fallback_recommendation(symbol, context)
     
     def generate_batch_recommendations(self, symbols: List[str]) -> List[Dict]:
         """
@@ -114,10 +111,14 @@ class StrategyPlanner:
         """
         recommendations = []
         
-        for symbol in symbols:
+        for i, symbol in enumerate(symbols):
             rec = self.generate_recommendation(symbol)
             if rec:
                 recommendations.append(rec)
+            
+            # Rate limiting: 0.5s delay (conservative for Paid tier 2K RPM)
+            if i < len(symbols) - 1:
+                time.sleep(0.5)
         
         return recommendations
     

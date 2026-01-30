@@ -14,6 +14,9 @@ from typing import Dict, List, Optional, Any
 import sqlite3
 import json
 import logging
+import time
+
+from utils.gemini_client import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -121,35 +124,29 @@ class NewsAnalyst:
             return self._fallback_sentiment(news_item)
         
         prompt = self._build_sentiment_prompt(news_item)
+        symbol = news_item.get('symbol', 'Unknown')
         
-        try:
-            response = self.gemini_model.generate_content(
+        def make_call():
+            return self.gemini_model.generate_content(
                 prompt,
                 generation_config=genai.GenerationConfig(
-                    temperature=0.1,  # Low temp for consistency
+                    temperature=0.1,
                     max_output_tokens=200
                 )
             )
-            
-            # Parse JSON from response
+        
+        response = call_with_retry(make_call, context=symbol)
+        
+        if response:
             result = self._parse_json_response(response.text)
-            
             if result:
-                # Add metadata
-                result['symbol'] = news_item['symbol']
+                result['symbol'] = symbol
                 result['headline'] = news_item['headline']
                 result['timestamp'] = datetime.now().isoformat()
-                
-                # Write to database
                 self._write_to_db(result)
-                
                 return result
-            else:
-                return self._fallback_sentiment(news_item)
-                
-        except Exception as e:
-            logger.error(f"Gemini analysis error: {e}")
-            return self._fallback_sentiment(news_item)
+        
+        return self._fallback_sentiment(news_item)
     
     def analyze_batch(self, symbols: List[str]) -> List[Dict]:
         """
@@ -164,9 +161,13 @@ class NewsAnalyst:
         news_items = self.fetch_news(symbols)
         analyses = []
         
-        for item in news_items:
+        for i, item in enumerate(news_items):
             analysis = self.analyze_sentiment(item)
             analyses.append(analysis)
+            
+            # Rate limiting: 0.5s delay (conservative for Paid tier 2K RPM)
+            if i < len(news_items) - 1:
+                time.sleep(0.5)
         
         return analyses
     
