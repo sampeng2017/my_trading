@@ -9,6 +9,7 @@ Modes:
   premarket   - Morning scan (safe, no recommendations)
   market      - Generate trade recommendations
   postmarket  - Daily summary email
+  review      - Portfolio review (explicit sell consideration for holdings)
   auto        - Auto-detect based on time (default)
 """
 
@@ -24,7 +25,7 @@ def main():
     # Determine mode
     mode = sys.argv[1] if len(sys.argv) > 1 else "auto"
 
-    valid_modes = ["premarket", "market", "postmarket", "auto"]
+    valid_modes = ["premarket", "market", "postmarket", "review", "auto"]
     if mode not in valid_modes:
         print(f"❌ Invalid mode: {mode}")
         print(f"   Valid modes: {', '.join(valid_modes)}")

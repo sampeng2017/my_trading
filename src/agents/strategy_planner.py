@@ -122,6 +122,51 @@ class StrategyPlanner:
         
         return recommendations
     
+    def review_holdings(self) -> List[Dict]:
+        """
+        Explicitly review all current holdings for sell opportunities.
+        
+        Uses a sell-focused analysis perspective, particularly for
+        overweight or profitable positions that might benefit from rebalancing.
+        
+        Returns:
+            List of recommendation dicts for held positions
+        """
+        # Get current holdings from database
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT h.symbol, h.quantity, h.current_value
+            FROM holdings h
+            JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+            WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
+            AND h.quantity > 0
+        """)
+        
+        holdings = cursor.fetchall()
+        conn.close()
+        
+        if not holdings:
+            logger.info("No holdings to review")
+            return []
+        
+        logger.info(f"📊 Reviewing {len(holdings)} holdings for sell opportunities...")
+        
+        recommendations = []
+        for i, (symbol, qty, value) in enumerate(holdings):
+            logger.info(f"  Reviewing {symbol}: {qty:.0f} shares (${value:,.2f})")
+            
+            rec = self.generate_recommendation(symbol)
+            if rec:
+                recommendations.append(rec)
+            
+            # Rate limiting
+            if i < len(holdings) - 1:
+                time.sleep(1.0)
+        
+        return recommendations
+    
     def _gather_context(self, symbol: str) -> Dict:
         """Pull all relevant data from database."""
         conn = sqlite3.connect(self.db_path)
@@ -201,7 +246,46 @@ class StrategyPlanner:
         position = context.get('current_position', {})
         position_qty = position.get('quantity', 0)
         cost_basis = position.get('cost_basis')
+        position_value = position.get('current_value', 0) or 0
+        portfolio_equity = context.get('portfolio_equity', 10000)
+        
+        # Calculate position weight and P/L
+        position_pct = (position_value / portfolio_equity * 100) if portfolio_equity > 0 else 0
+        is_overweight = position_pct > 20
+        
+        # Calculate unrealized P/L
+        if cost_basis and position_qty > 0 and price > 0:
+            total_cost = cost_basis * position_qty
+            unrealized_pl = position_value - total_cost
+            unrealized_pl_pct = (unrealized_pl / total_cost * 100) if total_cost > 0 else 0
+            pl_str = f"${unrealized_pl:+,.2f} ({unrealized_pl_pct:+.1f}%)"
+        else:
+            unrealized_pl_pct = 0
+            pl_str = "N/A"
+        
         cost_str = f"${cost_basis:.2f}" if cost_basis else "N/A"
+        
+        # Build position section based on whether they hold the stock
+        if position_qty > 0:
+            position_section = f"""**Current Position in {symbol}:**
+- Shares Held: {position_qty:,.0f}
+- Cost Basis: {cost_str}
+- Current Value: ${position_value:,.2f}
+- Position Size: {position_pct:.1f}% of portfolio
+- Unrealized P/L: {pl_str}
+- OVERWEIGHT: {'⚠️ YES - Consider rebalancing' if is_overweight else 'No'}"""
+        else:
+            position_section = f"**Current Position in {symbol}:** None (considering new entry)"
+        
+        # Build profit-taking guidance
+        profit_guidance = ""
+        if position_qty > 0:
+            profit_guidance = """
+**Important - Existing Position Guidance:**
+- If position is >20% of portfolio, STRONGLY consider SELL to rebalance
+- If unrealized gain >20%, consider partial profit-taking
+- Evaluate honestly: Should you ADD more, HOLD, or SELL some/all?
+- Don't let winners become losers - protect gains on large positions"""
         
         prompt = f"""You are a Senior Financial Analyst evaluating a trade opportunity.
 
@@ -216,10 +300,12 @@ class StrategyPlanner:
 **Recent News Sentiment:**
 {self._format_news(context.get('news_sentiment', []))}
 
-**Current Portfolio Context:**
-- Total Equity: ${context.get('portfolio_equity', 10000):,.2f}
+**Portfolio Context:**
+- Total Equity: ${portfolio_equity:,.2f}
 - Cash Available: ${context.get('cash_balance', 10000):,.2f}
-- Existing Position in {symbol}: {position_qty} shares @ {cost_str}
+
+{position_section}
+{profit_guidance}
 
 **Instructions:**
 Use the following step-by-step reasoning process:
@@ -231,7 +317,7 @@ Evaluate the price trend. Is it above/below SMA? Is momentum clear?
 Review the news. Is there a clear catalyst? What's the consensus?
 
 **Step 3: Portfolio Risk**
-Check position sizing. Would this trade create over-concentration?
+Check position sizing. Is this position overweight? Should you rebalance?
 
 **Step 4: Final Recommendation**
 Based on the above, what action do you recommend?

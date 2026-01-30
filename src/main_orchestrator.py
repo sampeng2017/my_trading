@@ -145,6 +145,8 @@ class TradingOrchestrator:
             self.run_market_hours()
         elif mode == 'postmarket':
             self.run_postmarket()
+        elif mode == 'review':
+            self.run_portfolio_review()
         else:
             logger.info(f"Outside market hours ({now.strftime('%I:%M %p')}). No action taken.")
     
@@ -264,12 +266,66 @@ class TradingOrchestrator:
                 logger.warning(f"Stock screener error: {e}")
 
         return list(symbols)
+    
+    def run_portfolio_review(self):
+        """Portfolio review mode - explicitly review all holdings for sell opportunities."""
+        logger.info("📊 Running Portfolio Review Mode...")
+        logger.info("Reviewing all current holdings for sell/rebalance opportunities")
+        
+        # Update market data for holdings first
+        holdings_symbols = self.portfolio.get_holdings_symbols()
+        if not holdings_symbols:
+            logger.info("No holdings to review")
+            return
+        
+        logger.info(f"Holdings to review: {', '.join(holdings_symbols)}")
+        
+        # Update market data
+        logger.info("Updating market data for holdings...")
+        self.market.scan_symbols(holdings_symbols)
+        
+        # Analyze news for holdings
+        self.news.analyze_batch(holdings_symbols)
+        
+        # Use portfolio review method
+        recommendations = self.strategy.review_holdings()
+        
+        # Log all recommendations (including HOLD)
+        for rec in recommendations:
+            action = rec.get('action', 'UNKNOWN')
+            conf = rec.get('confidence', 0)
+            logger.info(f"  {rec['symbol']}: {action} (confidence: {conf:.0%})")
+            logger.info(f"    Reasoning: {rec.get('reasoning', 'N/A')[:100]}")
+        
+        # Filter for actionable recommendations (not HOLD)
+        actionable = [rec for rec in recommendations if rec.get('action') != 'HOLD']
+        
+        if not actionable:
+            logger.info("No sell/buy signals for current holdings. All positions look stable.")
+            return
+        
+        # Validate through risk controller and send alerts
+        approved_trades = []
+        for rec in actionable:
+            result = self.risk.validate_trade(rec)
+            
+            if result['approved']:
+                approved_trades.append((rec, result))
+                logger.info(f"  ✅ {rec['symbol']} {rec['action']} approved: {result.get('approved_shares', 0)} shares")
+            else:
+                logger.info(f"  ❌ {rec['symbol']} vetoed: {result['reason']}")
+        
+        # Send notifications
+        for rec, result in approved_trades:
+            self.notifier.send_trade_alert(rec, result)
+        
+        logger.info(f"✅ Portfolio review complete. {len(approved_trades)} trade alerts sent.")
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Trading System Orchestrator')
-    parser.add_argument('--mode', choices=['premarket', 'market', 'postmarket', 'auto'],
+    parser.add_argument('--mode', choices=['premarket', 'market', 'postmarket', 'review', 'auto'],
                        default='auto', help='Operating mode (default: auto-detect)')
     parser.add_argument('--config', help='Path to config file')
     parser.add_argument('--log', help='Path to log file')
