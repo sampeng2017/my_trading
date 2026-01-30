@@ -165,9 +165,9 @@ class NewsAnalyst:
             analysis = self.analyze_sentiment(item)
             analyses.append(analysis)
             
-            # Rate limiting: 0.5s delay (conservative for Paid tier 2K RPM)
+            # Rate limiting: 1s delay to avoid per-second burst limits
             if i < len(news_items) - 1:
-                time.sleep(0.5)
+                time.sleep(1.0)
         
         return analyses
     
