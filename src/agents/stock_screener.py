@@ -15,6 +15,7 @@ import sqlite3
 import requests
 import logging
 import math
+import re  # New import
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
@@ -28,6 +29,14 @@ try:
 except ImportError:
     ALPACA_AVAILABLE = False
     logger.warning("alpaca-py not installed. Screener will use Alpha Vantage only.")
+
+# Try to import Google Generative AI
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    logger.warning("google-generativeai not installed. LLM ranking will be disabled.")
 
 
 class StockScreener:
@@ -64,6 +73,24 @@ class StockScreener:
         risk_config = self.config.get('risk', {})
         self.min_volume = risk_config.get('min_liquidity_volume', 200000)
         self.max_volatility = risk_config.get('max_volatility_pct', 0.10)
+
+        # LLM re-ranking config
+        self.use_llm_ranking = screener_config.get('use_llm_ranking', False)
+        self.llm_candidate_pool = screener_config.get('llm_candidate_pool', 20)
+        self.model_screening = screener_config.get('model_screening', 'gemini-2.5-pro')
+        self.temperature_screening = screener_config.get('temperature_screening', 0.2)
+        
+        # Initialize Gemini for LLM ranking
+        self.gemini_model = None
+        if GEMINI_AVAILABLE and self.use_llm_ranking:
+            gemini_key = self.config.get('api_keys', {}).get('gemini_api_key')
+            if gemini_key:
+                try:
+                    genai.configure(api_key=gemini_key)
+                    self.gemini_model = genai.GenerativeModel(self.model_screening)
+                    logger.info(f"Gemini {self.model_screening} initialized for LLM screening")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Gemini for screening: {e}")
 
         # Initialize Alpaca client
         self.alpaca_client = None
@@ -138,11 +165,28 @@ class StockScreener:
         # Rank by tradability
         ranked = self._rank_candidates(filtered)
 
-        # Cache results
-        self._cache_screening_results(ranked, source)
-        self._log_screener_run(source, len(candidates), len(ranked), None)
+        # LLM re-ranking if enabled
+        if self.use_llm_ranking and self.gemini_model and len(ranked) >= self.llm_candidate_pool:
+            try:
+                logger.info(f"Using LLM to re-rank top {self.llm_candidate_pool} candidates")
+                pool = ranked[:self.llm_candidate_pool]
+                # Get detailed data for LLM
+                pool_data = [c for c in filtered if c['symbol'] in pool]
+                final_ranked = self._llm_rerank_candidates(pool_data, max_symbols)
+                logger.info(f"LLM re-ranking completed: {final_ranked}")
+            except Exception as e:
+                logger.warning(f"LLM re-ranking failed, using rule-based ranking: {e}")
+                final_ranked = ranked[:max_symbols]
+        else:
+            final_ranked = ranked[:max_symbols]
+            if self.use_llm_ranking and not self.gemini_model:
+                logger.warning("LLM ranking enabled but Gemini not available")
 
-        return ranked[:max_symbols]
+        # Cache results
+        self._cache_screening_results(final_ranked, source)
+        self._log_screener_run(source, len(candidates), len(final_ranked), None)
+
+        return final_ranked
 
     def _get_cached_screening(self, ttl_override: Optional[int] = None) -> Optional[List[str]]:
         """Check if fresh screening results exist in cache."""
@@ -363,6 +407,141 @@ class StockScreener:
         scored.sort(key=lambda x: x['score'], reverse=True)
 
         return [s['symbol'] for s in scored]
+
+    def _llm_rerank_candidates(self, candidates: List[Dict], max_symbols: int) -> List[str]:
+        """
+        Use Gemini LLM to intelligently re-rank stock candidates.
+        
+        Args:
+            candidates: List of candidate dicts with symbol, price, volume, change_pct
+            max_symbols: Number of symbols to return
+            
+        Returns:
+            List of top symbols after LLM re-ranking
+        """
+        if not self.gemini_model:
+            logger.warning("Gemini model not available for re-ranking")
+            return [c['symbol'] for c in candidates[:max_symbols]]
+        
+        import json  # Import at method level
+        
+        # Build prompt with candidate details
+        candidate_list = ""
+        for i, c in enumerate(candidates, 1):
+            symbol = c.get('symbol', 'UNKNOWN')
+            price = c.get('price', 0)
+            volume = c.get('volume', 0)
+            change = c.get('change_pct', 0)
+            
+            price_str = f"${price:.2f}" if price > 0 else "N/A"
+            
+            candidate_list += f"{i}. {symbol} - Price: {price_str}, Volume: {volume:,}, Change: {change:+.2f}%\n"
+        
+        prompt = f"""You are a stock screening analyst for swing trading. Re-rank these {len(candidates)} stocks by tradability.
+
+Candidates:
+{candidate_list}
+Consider:
+1. **Sector Rotation**: Which sectors have momentum in current market regime?
+2. **Technical Setup**: Breakouts, bounces, or consolidations with potential
+3. **Momentum Quality**: Sustainable moves vs exhaustion/parabolic
+4. **Liquidity**: Higher volume = better execution
+5. **Risk/Reward**: Clear entry/exit levels
+
+Note: If Price is "N/A", it means data is missing but the stock has high volume. Do NOT disqualify based on missing price. Focus on volume and ticker reputation.
+
+Return JSON with top {max_symbols} symbols ranked by tradability:
+{{
+  "rankings": [
+    {{"symbol": "AAPL", "score": 95, "reason": "Brief reason (1 sentence)"}},
+    ...
+  ]
+}}
+
+Respond ONLY with valid JSON, no markdown formatting."""
+        
+        try:
+            # Call Gemini with low temperature for consistency
+            # Disable safety filters for financial analysis (not giving advice, just screening)
+            response = self.gemini_model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=self.temperature_screening,
+                    max_output_tokens=4000
+                ),
+                safety_settings={
+                    "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+                    "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+                    "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE"
+                }
+            )
+            
+            # Check if response has text (may be blocked by safety filters)
+            if not response.text:
+                logger.warning(f"LLM response blocked (finish_reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'})")
+                return [c['symbol'] for c in candidates[:max_symbols]]
+            
+            # Parse JSON response
+            response_text = response.text.strip()
+            
+            # Log raw response for debugging
+            logger.debug(f"Raw LLM response: {response_text[:500]}")
+            
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                response_text = response_text.split('\n', 1)[1]
+                response_text = response_text.rsplit('```', 1)[0]
+            
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Fallback: Try regex to extract rankings array
+                logger.warning("JSON parse failed, trying regex fallback")
+                
+                # Ultimate fallback: Just extract symbols in appearing order!
+                # Since the LLM is asked to rank them, the order of appearance is the rank.
+                matches = re.findall(r'"symbol":\s*"([^"]+)"', response_text)
+                
+                if matches:
+                    logger.info(f"Extracted {len(matches)} symbols via regex fallback")
+                    # Reconstruct minimal valid data structure
+                    rankings = [{"symbol": s, "reason": "Extracted via regex"} for s in matches]
+                    data = {"rankings": rankings}
+                else:
+                    raise  # Re-raise if absolutely nothing found
+            
+            rankings = data.get('rankings', [])
+            
+            # Extract symbols in ranked order
+            ranked_symbols = [r['symbol'] for r in rankings if 'symbol' in r]
+            
+            # Log reasoning for top stocks
+            for i, r in enumerate(rankings[:3], 1):
+                logger.info(f"LLM Rank #{i}: {r.get('symbol')} - {r.get('reason', 'No reason')}")
+            
+            if len(ranked_symbols) >= max_symbols:
+                return ranked_symbols[:max_symbols]
+            else:
+                logger.warning(f"LLM returned only {len(ranked_symbols)} symbols, expected {max_symbols}")
+                # Fill remaining with rule-based ranking
+                remaining = [c['symbol'] for c in candidates if c['symbol'] not in ranked_symbols]
+                return (ranked_symbols + remaining)[:max_symbols]
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            if 'response_text' in locals():
+                logger.debug(f"Response text: {response_text[:500]}")
+            # Fallback to rule-based
+            return [c['symbol'] for c in candidates[:max_symbols]]
+        except AttributeError as e:
+            logger.error(f"LLM response missing expected attributes: {e}")
+            # Fallback to rule-based
+            return [c['symbol'] for c in candidates[:max_symbols]]
+        except Exception as e:
+            logger.error(f"LLM re-ranking error: {e}")
+            # Fallback to rule-based
+            return [c['symbol'] for c in candidates[:max_symbols]]
 
     def _cache_screening_results(self, symbols: List[str], source: str):
         """Store screening results in database."""

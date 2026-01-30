@@ -54,12 +54,10 @@ watchlist:
 
 # AI Configuration
 ai:
-  model_strategy: "gemini-2.0-flash"
-  model_sentiment: "gemini-2.0-flash"
-  temperature_strategy: 0.3
-  temperature_sentiment: 0.1
-  max_tokens_strategy: 1000
-  max_tokens_sentiment: 200
+  model_strategy: "gemini-2.5-flash"     # Main model for trade analysis
+  model_sentiment: "gemini-2.5-flash"    # Model for news sentiment
+  temperature: 0.2
+  max_tokens: 1000
 
 # Limits & Constants
 limits:
@@ -74,4 +72,9 @@ screener:
   cache_ttl_seconds: 3600          # 1 hour cache for screening results
   min_price: 5.0                   # Avoid penny stocks
   max_price: 500.0                 # Avoid ultra high-priced illiquids
-
+  
+  # LLM Re-ranking (intelligent stock selection)
+  use_llm_ranking: true            # Enable AI-powered re-ranking
+  llm_candidate_pool: 10           # How many to send to LLM for ranking
+  model_screening: "gemini-2.5-flash"  # Gemini 2.5 Flash
+  temperature_screening: 0.2       # Low temp for consistent rankings
