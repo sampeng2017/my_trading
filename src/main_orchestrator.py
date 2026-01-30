@@ -217,11 +217,11 @@ class TradingOrchestrator:
             else:
                 logger.info(f"  ❌ {rec['symbol']} vetoed: {result['reason']}")
         
-        # Send notifications for approved trades
-        for rec, result in approved_trades:
-            self.notifier.send_trade_alert(rec, result)
+        # Send combined notification (iMessage + email)
+        if approved_trades:
+            self.notifier.send_batch_alerts(approved_trades)
         
-        logger.info(f"✅ Market hours analysis complete. {len(approved_trades)} trade alerts sent.")
+        logger.info(f"✅ Market hours analysis complete. {len(approved_trades)} trade recommendations.")
     
     def run_postmarket(self):
         """Post-market summary routine."""
@@ -315,11 +315,11 @@ class TradingOrchestrator:
             else:
                 logger.info(f"  ❌ {rec['symbol']} vetoed: {result['reason']}")
         
-        # Send notifications
-        for rec, result in approved_trades:
-            self.notifier.send_trade_alert(rec, result)
+        # Send combined notification (iMessage + email)
+        if approved_trades:
+            self.notifier.send_batch_alerts(approved_trades)
         
-        logger.info(f"✅ Portfolio review complete. {len(approved_trades)} trade alerts sent.")
+        logger.info(f"✅ Portfolio review complete. {len(approved_trades)} trade recommendations.")
 
 
 def main():

@@ -115,6 +115,89 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
 
         return msg
     
+    def send_batch_alerts(self, approved_trades: List[tuple]) -> bool:
+        """
+        Send all approved trades as a single combined message via iMessage AND email.
+        
+        Args:
+            approved_trades: List of (recommendation, risk_result) tuples
+            
+        Returns:
+            True if at least one channel succeeded
+        """
+        if not approved_trades:
+            logger.info("No trades to send")
+            return False
+        
+        # Build combined message
+        message = self._format_batch_message(approved_trades)
+        
+        # Send via BOTH channels for reliability
+        imessage_success = False
+        email_success = False
+        
+        # Try iMessage
+        if self._should_send_imessage():
+            imessage_success = self._send_imessage(message)
+        
+        # Always send email for batch alerts (backup + record)
+        subject = f"📊 Trading Alert: {len(approved_trades)} Recommendations"
+        email_success = self._send_email(subject, message)
+        
+        if imessage_success:
+            logger.info(f"Batch alert sent via iMessage ({len(approved_trades)} trades)")
+        if email_success:
+            logger.info(f"Batch alert sent via email ({len(approved_trades)} trades)")
+        
+        if not imessage_success and not email_success:
+            logger.error("Failed to send batch alert via any channel")
+            return False
+            
+        return True
+    
+    def _format_batch_message(self, approved_trades: List[tuple]) -> str:
+        """Format multiple trades into a single readable message."""
+        lines = [
+            f"📊 TRADING RECOMMENDATIONS - {datetime.now().strftime('%b %d, %I:%M %p')}",
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            ""
+        ]
+        
+        # Group by action type
+        buys = [(rec, risk) for rec, risk in approved_trades if rec.get('action') == 'BUY']
+        sells = [(rec, risk) for rec, risk in approved_trades if rec.get('action') == 'SELL']
+        
+        if sells:
+            lines.append("🔴 SELL SIGNALS:")
+            for rec, risk in sells:
+                symbol = rec.get('symbol')
+                shares = risk.get('approved_shares', 0)
+                conf = rec.get('confidence', 0)
+                reason = rec.get('reasoning', '')[:60]
+                lines.append(f"  • {symbol}: {shares:,} shares ({conf:.0%})")
+                lines.append(f"    └ {reason}...")
+            lines.append("")
+        
+        if buys:
+            lines.append("🟢 BUY SIGNALS:")
+            for rec, risk in buys:
+                symbol = rec.get('symbol')
+                shares = risk.get('approved_shares', 0)
+                cost = risk.get('approved_cost', 0)
+                conf = rec.get('confidence', 0)
+                reason = rec.get('reasoning', '')[:60]
+                lines.append(f"  • {symbol}: {shares:,} shares @ ${cost:,.0f} ({conf:.0%})")
+                lines.append(f"    └ {reason}...")
+            lines.append("")
+        
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"Total: {len(sells)} sells, {len(buys)} buys",
+            "Reply with actions taken or questions."
+        ])
+        
+        return "\n".join(lines)
+    
     def _send_imessage(self, message: str) -> bool:
         """
         Send via macOS Messages app using AppleScript.
