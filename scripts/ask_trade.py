@@ -14,25 +14,8 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import yaml
+from src.utils.config import load_config, get_db_path
 from src.agents.trade_advisor import TradeAdvisor
-
-
-def load_config():
-    """Load configuration from config.yaml"""
-    config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'config', 'config.yaml'
-    )
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
-
-
-def get_api_keys():
-    """Get API keys from environment."""
-    return {
-        'gemini_api_key': os.environ.get('GEMINI_API_KEY')
-    }
 
 
 def print_response(response: dict):
@@ -144,27 +127,26 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load config
+    # Load config (handles env var substitution and .env loading)
     config = load_config()
-    api_keys = get_api_keys()
     
-    if not api_keys.get('gemini_api_key'):
-        print("Error: GEMINI_API_KEY environment variable not set.")
-        print("Please set it: export GEMINI_API_KEY='your-key-here'")
+    # Get API key from config (supports ${GEMINI_API_KEY} syntax)
+    gemini_key = config.get('api_keys', {}).get('gemini_api_key', '')
+    
+    # Check if key is still a placeholder
+    if not gemini_key or gemini_key.startswith('${'):
+        print("Error: GEMINI_API_KEY not configured.")
+        print("Please set it in .env file or environment:")
+        print("  export GEMINI_API_KEY='your-key-here'")
         sys.exit(1)
     
     # Get database path
-    db_path = args.db_path or config.get('database', {}).get('path', 'data/trading.db')
-    if not os.path.isabs(db_path):
-        db_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            db_path
-        )
+    db_path = args.db_path or get_db_path(config)
     
     # Initialize advisor
     advisor = TradeAdvisor(
         db_path=db_path,
-        gemini_key=api_keys['gemini_api_key'],
+        gemini_key=gemini_key,
         config=config
     )
     
