@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class PortfolioAccountant:
     """Agent responsible for portfolio state management via CSV imports."""
     
-    # Fidelity money market/cash symbols
-    CASH_SYMBOLS = {'SPAXX', 'CORE', 'FDRXX', 'FCASH'}
+    # Fidelity money market/cash symbols (also matches FCASH**)
+    CASH_SYMBOLS = {'SPAXX', 'CORE', 'FDRXX', 'FCASH', 'FCASH**'}
     
     def __init__(self, db_path: str):
         """
@@ -61,12 +61,20 @@ class PortfolioAccountant:
             Snapshot ID of the created snapshot
         """
         logger.info(f"Importing Fidelity CSV: {csv_path}")
-        
-        # Read CSV
-        df = pd.read_csv(csv_path)
-        
+
+        # Read CSV with Fidelity-specific handling:
+        # - utf-8-sig: handles BOM character from Windows exports
+        # - on_bad_lines='skip': handles footer text and malformed rows
+        # - index_col=False: prevents first column being used as DataFrame index
+        df = pd.read_csv(csv_path, encoding='utf-8-sig', on_bad_lines='skip', index_col=False)
+
         # Normalize column names (handle variations)
         df.columns = df.columns.str.strip()
+
+        # Filter out footer rows - keep only rows with valid Account Number
+        if 'Account Number' in df.columns:
+            # Valid account numbers start with letter+digits (e.g., X48681083)
+            df = df[df['Account Number'].astype(str).str.match(r'^[A-Z]\d+', na=False)]
         
         # Validate required columns
         required_columns = {'Symbol', 'Current Value', 'Quantity'}
@@ -87,16 +95,26 @@ class PortfolioAccountant:
             
             if not symbol or symbol == 'NAN':
                 continue
+
+            # Skip invalid symbols (numeric IDs like CUSIP, restricted shares)
+            if symbol.isdigit():
+                logger.debug(f"Skipping numeric symbol (likely CUSIP): {symbol}")
+                continue
             
             # Handle cash positions (Fidelity uses SPAXX for money market)
-            if symbol in self.CASH_SYMBOLS:
+            # Also match symbols starting with known cash prefixes (e.g., FCASH**)
+            is_cash = symbol in self.CASH_SYMBOLS or symbol.startswith('FCASH') or symbol.startswith('SPAXX')
+            if is_cash:
                 cash_value = self._parse_currency(row.get('Current Value', 0))
                 cash_balance += cash_value
                 logger.debug(f"Cash detected: {symbol} = ${cash_value:,.2f}")
             else:
                 # Regular equity position
                 quantity = self._parse_number(row.get('Quantity', 0))
-                cost_basis = self._parse_currency(row.get('Cost Basis Per Share', 0))
+                # Handle both column name variations
+                cost_basis = self._parse_currency(
+                    row.get('Cost Basis Per Share') or row.get('Average Cost Basis', 0)
+                )
                 current_value = self._parse_currency(row.get('Current Value', 0))
                 
                 if quantity > 0:
@@ -131,8 +149,11 @@ class PortfolioAccountant:
             return 0.0
         if isinstance(value, (int, float)):
             return float(value)
-        # Remove $, commas, and whitespace
-        cleaned = str(value).replace('$', '').replace(',', '').strip()
+        # Remove $, commas, +/- signs, and whitespace
+        cleaned = str(value).replace('$', '').replace(',', '').replace('+', '').strip()
+        # Handle Fidelity's "--" for missing values
+        if cleaned == '--' or cleaned == '':
+            return 0.0
         try:
             return float(cleaned)
         except ValueError:
@@ -145,6 +166,9 @@ class PortfolioAccountant:
         if isinstance(value, (int, float)):
             return float(value)
         cleaned = str(value).replace(',', '').strip()
+        # Handle Fidelity's "--" for missing values
+        if cleaned == '--' or cleaned == '':
+            return 0.0
         try:
             return float(cleaned)
         except ValueError:
@@ -344,4 +368,5 @@ class PortfolioAccountant:
         snapshot = self.get_latest_snapshot()
         if not snapshot:
             return []
-        return [h['symbol'] for h in snapshot['holdings']]
+        # Filter out invalid symbols (numeric IDs like CUSIP)
+        return [h['symbol'] for h in snapshot['holdings'] if not h['symbol'].isdigit()]

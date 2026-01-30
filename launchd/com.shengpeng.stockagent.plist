@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.shengpeng.stockagent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/shengpeng/study/repo/my_trading/venv/bin/python3</string>
+        <string>/Users/shengpeng/study/repo/my_trading/src/main_orchestrator.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/shengpeng/study/repo/my_trading</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+        <!-- API Keys -->
+        <key>ALPACA_API_KEY</key>
+        <string>${ALPACA_API_KEY}</string>
+        <key>ALPACA_SECRET_KEY</key>
+        <string>${ALPACA_SECRET_KEY}</string>
+        <key>GEMINI_API_KEY</key>
+        <string>${GEMINI_API_KEY}</string>
+        <key>FINNHUB_API_KEY</key>
+        <string>${FINNHUB_API_KEY}</string>
+        <key>ALPHA_VANTAGE_API_KEY</key>
+        <string>${ALPHA_VANTAGE_API_KEY}</string>
+
+        <!-- Notifications -->
+        <key>IMESSAGE_RECIPIENT</key>
+        <string>${IMESSAGE_RECIPIENT}</string>
+        <key>GMAIL_USER</key>
+        <string>${GMAIL_USER}</string>
+        <key>GMAIL_APP_PASSWORD</key>
+        <string>${GMAIL_APP_PASSWORD}</string>
+        <key>EMAIL_RECIPIENT</key>
+        <string>${EMAIL_RECIPIENT}</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/shengpeng/study/repo/my_trading/logs/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/shengpeng/study/repo/my_trading/logs/stderr.log</string>
+
+    <!-- Schedule (Pacific Time) -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <!-- 6:00 AM - Pre-market scan -->
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- 6:35 AM - Market open -->
+        <dict>
+            <key>Hour</key><integer>6</integer>
+            <key>Minute</key><integer>35</integer>
+        </dict>
+        <!-- 9:00 AM - Mid-morning check -->
+        <dict>
+            <key>Hour</key><integer>9</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- 11:00 AM - Mid-day check -->
+        <dict>
+            <key>Hour</key><integer>11</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+        <!-- 1:05 PM - Post-market summary -->
+        <dict>
+            <key>Hour</key><integer>13</integer>
+            <key>Minute</key><integer>5</integer>
+        </dict>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/shengpeng/study/repo/my_trading</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
