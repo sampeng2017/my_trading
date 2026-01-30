@@ -48,12 +48,17 @@ class NewsAnalyst:
         self.config = config or {}
         self.gemini_model = None
         
+        # AI configuration
+        ai_config = self.config.get('ai', {})
+        self.model_name = ai_config.get('model_sentiment', 'gemini-2.0-flash')
+        self.temperature = ai_config.get('temperature', 0.1)
+        
         # Configure Gemini if available
         if GEMINI_AVAILABLE and gemini_key:
             try:
                 genai.configure(api_key=gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-                logger.info("Gemini model initialized successfully")
+                self.gemini_model = genai.GenerativeModel(self.model_name)
+                logger.info(f"Gemini {self.model_name} initialized for news analysis")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
     
@@ -130,7 +135,7 @@ class NewsAnalyst:
             return self.gemini_model.generate_content(
                 prompt,
                 generation_config=genai.GenerationConfig(
-                    temperature=0.1,
+                    temperature=self.temperature,
                     max_output_tokens=200
                 )
             )

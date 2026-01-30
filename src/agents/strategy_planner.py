@@ -31,23 +31,31 @@ except ImportError:
 class StrategyPlanner:
     """Agent responsible for AI-powered trade recommendation synthesis."""
     
-    def __init__(self, db_path: str, gemini_key: Optional[str] = None):
+    def __init__(self, db_path: str, gemini_key: Optional[str] = None, 
+                 config: Optional[Dict] = None):
         """
         Initialize Strategy Planner.
         
         Args:
             db_path: Path to SQLite database
             gemini_key: Google Gemini API key (optional)
+            config: Configuration dict (optional)
         """
         self.db_path = db_path
+        self.config = config or {}
         self.gemini_model = None
         
-        # Configure Gemini with Pro model for reasoning
+        # AI configuration
+        ai_config = self.config.get('ai', {})
+        self.model_name = ai_config.get('model_strategy', 'gemini-2.0-flash')
+        self.temperature = ai_config.get('temperature', 0.3)
+        
+        # Configure Gemini with configured model
         if GEMINI_AVAILABLE and gemini_key:
             try:
                 genai.configure(api_key=gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-                logger.info("Gemini Pro model initialized for strategy planning")
+                self.gemini_model = genai.GenerativeModel(self.model_name)
+                logger.info(f"Gemini {self.model_name} initialized for strategy planning")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
     
@@ -80,7 +88,7 @@ class StrategyPlanner:
             return self.gemini_model.generate_content(
                 prompt,
                 generation_config=genai.GenerationConfig(
-                    temperature=0.3,
+                    temperature=self.temperature,
                     max_output_tokens=1000
                 )
             )
@@ -182,14 +190,17 @@ class StrategyPlanner:
         """, (symbol.upper(),))
         market_data = cursor.fetchone()
         
-        # Get recent news sentiment
+        # Get recent news sentiment (only from last 72 hours)
+        # Use datetime() to parse ISO timestamps (which have 'T' separator)
+        news_recency_hours = 72
         cursor.execute("""
             SELECT sentiment, confidence, implied_action, key_reason
             FROM news_analysis
             WHERE symbol = ?
+            AND datetime(timestamp) > datetime('now', ?)
             ORDER BY timestamp DESC
             LIMIT 5
-        """, (symbol.upper(),))
+        """, (symbol.upper(), f'-{news_recency_hours} hours'))
         news_items = cursor.fetchall()
         
         # Get current portfolio position (if any)

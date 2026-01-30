@@ -183,7 +183,7 @@ class RiskController:
                 'reason': f'Sector limit. {sector} exposure would exceed {self.MAX_SECTOR_EXPOSURE_PCT*100:.0f}%'
             }
         
-        # Check 5: Volatility filter
+        # Check 5: Volatility filter (FAIL-CLOSED: reject if data missing)
         if atr and price > 0:
             volatility_pct = atr / price
             if volatility_pct > self.MAX_VOLATILITY_PCT:
@@ -191,13 +191,24 @@ class RiskController:
                     'approved': False,
                     'reason': f'Excessive volatility. ATR is {volatility_pct*100:.1f}% of price (max {self.MAX_VOLATILITY_PCT*100:.0f}%)'
                 }
-        
-        # Check 6: Liquidity filter (skip if volume data unavailable)
-        avg_volume = context.get('avg_volume') or 0
-        if avg_volume and avg_volume > 0 and avg_volume < self.MIN_LIQUIDITY_VOLUME:
+        else:
             return {
                 'approved': False,
-                'reason': f'Low liquidity. Avg volume {avg_volume:,.0f} < required {self.MIN_LIQUIDITY_VOLUME:,.0f}'
+                'reason': f'Cannot assess volatility for {symbol}: ATR data unavailable (fail-closed policy)'
+            }
+        
+        # Check 6: Liquidity filter (FAIL-CLOSED: reject if data missing)
+        avg_volume = context.get('avg_volume') or 0
+        if avg_volume and avg_volume > 0:
+            if avg_volume < self.MIN_LIQUIDITY_VOLUME:
+                return {
+                    'approved': False,
+                    'reason': f'Low liquidity. Avg volume {avg_volume:,.0f} < required {self.MIN_LIQUIDITY_VOLUME:,.0f}'
+                }
+        else:
+            return {
+                'approved': False,
+                'reason': f'Cannot assess liquidity for {symbol}: volume data unavailable (fail-closed policy)'
             }
         
         # All checks passed!

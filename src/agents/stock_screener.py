@@ -327,6 +327,104 @@ class StockScreener:
 
         return candidates
 
+    def _enrich_missing_data(self, candidates: List[Dict]) -> List[Dict]:
+        """
+        Fetch prices and ATR for candidates missing data.
+        
+        Alpaca most-actives endpoint doesn't include price or volatility data,
+        so we need to fetch it separately for proper filtering.
+        """
+        # Identify candidates needing enrichment
+        needs_price = [c for c in candidates if not c.get('price')]
+        needs_atr = [c for c in candidates if c.get('price') and not c.get('atr')]
+        
+        if not self.alpaca_client:
+            return candidates
+        
+        # Enrich prices from quotes
+        if needs_price:
+            symbols = [c['symbol'] for c in needs_price if c.get('symbol')]
+            if symbols:
+                try:
+                    request = StockLatestQuoteRequest(symbol_or_symbols=symbols)
+                    quotes = self.alpaca_client.get_stock_latest_quote(request)
+                    
+                    for c in candidates:
+                        if not c.get('price') and c['symbol'] in quotes:
+                            q = quotes[c['symbol']]
+                            # Handle bid-only, ask-only, or both
+                            if q.bid_price and q.ask_price:
+                                c['price'] = (q.bid_price + q.ask_price) / 2
+                            elif q.ask_price:
+                                c['price'] = q.ask_price
+                            elif q.bid_price:
+                                c['price'] = q.bid_price
+                            if c.get('price'):
+                                logger.debug(f"Enriched {c['symbol']} with price ${c['price']:.2f}")
+                except Exception as e:
+                    logger.warning(f"Failed to enrich prices: {e}")
+        
+        # For volatility filtering, we need ATR from historical data
+        # Only fetch for candidates that passed price filter and lack ATR
+        symbols_for_atr = [c['symbol'] for c in candidates 
+                          if c.get('price') and not c.get('atr') and c.get('symbol')]
+        
+        if symbols_for_atr:
+            self._enrich_atr(candidates, symbols_for_atr)
+        
+        return candidates
+    
+    def _enrich_atr(self, candidates: List[Dict], symbols: List[str]):
+        """Fetch ATR data for symbols using historical bars."""
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame
+        
+        for symbol in symbols[:10]:  # Limit to avoid rate limits
+            try:
+                request = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=TimeFrame.Day,
+                    start=datetime.now() - timedelta(days=20)
+                )
+                bars = self.alpaca_client.get_stock_bars(request)
+                
+                if not bars:
+                    continue
+                
+                # Extract DataFrame
+                df = None
+                if hasattr(bars, 'df') and not bars.df.empty:
+                    df = bars.df
+                    if hasattr(df.index, 'get_level_values'):
+                        if symbol in df.index.get_level_values(0):
+                            df = df.loc[symbol]
+                elif symbol in bars:
+                    df = bars[symbol].df
+                
+                if df is not None and len(df) >= 14:
+                    # Calculate ATR
+                    high = df['high'] if 'high' in df.columns else df['High']
+                    low = df['low'] if 'low' in df.columns else df['Low']
+                    close = df['close'] if 'close' in df.columns else df['Close']
+                    
+                    high_low = high - low
+                    high_close = (high - close.shift()).abs()
+                    low_close = (low - close.shift()).abs()
+                    
+                    import pandas as pd
+                    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+                    atr = float(true_range.rolling(14).mean().iloc[-1])
+                    
+                    # Update candidate
+                    for c in candidates:
+                        if c['symbol'] == symbol:
+                            c['atr'] = atr
+                            logger.debug(f"Enriched {symbol} with ATR ${atr:.2f}")
+                            break
+                            
+            except Exception as e:
+                logger.debug(f"Failed to fetch ATR for {symbol}: {e}")
+
     def _apply_filters(self, candidates: List[Dict], watchlist: set) -> List[Dict]:
         """
         Apply screening criteria to filter candidates.
@@ -337,6 +435,9 @@ class StockScreener:
         - Volume above minimum
         - Valid symbol format
         """
+        # Enrich candidates with missing price/ATR data (e.g., from Alpaca most-actives)
+        candidates = self._enrich_missing_data(candidates)
+        
         filtered = []
 
         for c in candidates:
@@ -346,20 +447,28 @@ class StockScreener:
             if symbol in watchlist:
                 continue
 
-            # Skip invalid symbols (must be 1-5 uppercase letters)
-            if not symbol or not symbol.isalpha() or len(symbol) > 5:
+            # Skip invalid symbols (allow BRK.B, BF-B style tickers)
+            if not symbol or len(symbol) > 6 or not re.match(r'^[A-Z]+[.\-]?[A-Z]*$', symbol):
                 continue
 
-            # Price filter
+            # Price filter - REQUIRE valid price (no bypass)
             price = c.get('price', 0)
-            if price and (price < self.min_price or price > self.max_price):
-                logger.debug(f"Filtered {symbol}: price ${price} out of range")
+            if not price or price < self.min_price or price > self.max_price:
+                logger.debug(f"Filtered {symbol}: price ${price} invalid or out of range [{self.min_price}-{self.max_price}]")
                 continue
+
+            # Volatility filter (ATR-based if available)
+            atr = c.get('atr', 0)
+            if atr and price > 0:
+                volatility_pct = atr / price
+                if volatility_pct > self.max_volatility:
+                    logger.debug(f"Filtered {symbol}: volatility {volatility_pct:.1%} exceeds max {self.max_volatility:.0%}")
+                    continue
 
             # Volume filter
             volume = c.get('volume', 0)
             if volume and volume < self.min_volume:
-                logger.debug(f"Filtered {symbol}: volume {volume} below minimum")
+                logger.debug(f"Filtered {symbol}: volume {volume} below minimum {self.min_volume}")
                 continue
 
             filtered.append(c)

@@ -161,10 +161,31 @@ class MarketAnalyst:
             )
             bars = self.alpaca_client.get_stock_bars(request)
             
-            if not bars or symbol not in bars:
+            if not bars:
                 return None
             
-            df = bars[symbol].df
+            # Handle different alpaca-py SDK versions
+            try:
+                if hasattr(bars, 'df'):
+                    # Newer SDK: multi-index DataFrame
+                    df = bars.df
+                    if df.empty:
+                        return None
+                    # Check if symbol is in the index
+                    if isinstance(df.index, pd.MultiIndex):
+                        if symbol in df.index.get_level_values(0):
+                            df = df.loc[symbol]
+                        else:
+                            return None
+                elif symbol in bars:
+                    # Older SDK: dict-like access
+                    df = bars[symbol].df
+                else:
+                    return None
+            except Exception as e:
+                logger.warning(f"Unexpected bars structure for {symbol}: {e}")
+                return None
+            
             # Rename columns to match yfinance format
             df.columns = [c.capitalize() for c in df.columns]
             return df

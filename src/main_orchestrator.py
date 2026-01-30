@@ -85,7 +85,8 @@ class TradingOrchestrator:
         
         self.strategy = StrategyPlanner(
             self.db_path,
-            gemini_key=api_keys.get('gemini_api_key')
+            gemini_key=api_keys.get('gemini_api_key'),
+            config=self.config
         )
         
         self.risk = RiskController(self.db_path, self.config)
@@ -187,6 +188,10 @@ class TradingOrchestrator:
         
         # Get symbols
         symbols = self._get_monitoring_symbols()
+        
+        # Ensure metadata is populated for any new symbols (from screener)
+        logger.info("Populating metadata for new symbols...")
+        self.market.populate_metadata(symbols)
         
         # Update market data
         logger.info("Updating market data...")
