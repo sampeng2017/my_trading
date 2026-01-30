@@ -339,11 +339,19 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get today's recommendations
+        # Get today's recommendations (latest per symbol to avoid duplicates)
         cursor.execute("""
             SELECT symbol, action, confidence, reasoning
-            FROM strategy_recommendations
+            FROM strategy_recommendations r
             WHERE DATE(timestamp) = DATE('now')
+            AND r.id = (
+                SELECT id FROM strategy_recommendations r2 
+                WHERE r2.symbol = r.symbol 
+                AND DATE(r2.timestamp) = DATE('now')
+                ORDER BY r2.timestamp DESC 
+                LIMIT 1
+            )
+            ORDER BY timestamp DESC
         """)
         recommendations = cursor.fetchall()
         
