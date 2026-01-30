@@ -28,6 +28,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 - **Portfolio Tracking**: Automatic import of Fidelity CSV exports with trade inference via state diffing
 - **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA)
 - **AI-Powered Insights**: Gemini AI for news sentiment, strategy recommendations, and **screener ranking**
+- **Trade Question Advisor**: Natural language Q&A about your portfolio and trades ("Should I sell MSFT at 480?")
 - **Risk Management**: Deterministic position sizing, volatility filters, and sector exposure limits
 - **Smart Notifications**: iMessage for urgent alerts, email for daily summaries
 - **macOS Automation**: `launchd` scheduling and file system watchdog for automatic imports
@@ -81,6 +82,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 | **Market Analyst** | Fetches prices, calculates ATR/SMA, detects volatility | Deterministic |
 | **News Analyst** | Aggregates news, extracts sentiment via Gemini AI | AI-Powered |
 | **Strategy Planner** | Synthesizes data, generates recommendations with CoT reasoning | AI-Powered |
+| **Trade Advisor** | Answers natural language questions about trades with context | AI-Powered |
 | **Risk Controller** | Enforces position limits, volatility filters, calculates stop-loss | Deterministic |
 | **Notification Specialist** | Routes alerts via iMessage/email based on urgency | Deterministic |
 
@@ -321,6 +323,20 @@ python src/utils/watchdog_csv.py
 
 Drop CSV files into `inbox/` folder and they'll be imported automatically.
 
+### Trade Question Advisor
+
+Ask natural language questions about your portfolio:
+
+```bash
+# Single question
+python scripts/ask_trade.py "Should I sell 100 shares of MSFT at 480?"
+
+# Interactive mode
+python scripts/ask_trade.py --interactive
+```
+
+The advisor uses your portfolio data, recent news, market data, and past recommendations to provide AI-powered suggestions with confidence levels.
+
 ---
 
 ## Testing
@@ -467,6 +483,7 @@ my_trading/
 │   └── com.user.stockagent.plist  # macOS scheduler config
 ├── logs/                     # Log output directory
 ├── scripts/                  # Helper scripts for common tasks
+│   ├── ask_trade.py          # Trade question advisor CLI
 │   ├── check_config.py       # Verify configuration
 │   ├── check_database.py     # View database status
 │   ├── import_portfolio.py   # Import Fidelity CSVs
@@ -480,6 +497,7 @@ my_trading/
 │   │   ├── market_analyst.py
 │   │   ├── news_analyst.py
 │   │   ├── strategy_planner.py
+│   │   ├── trade_advisor.py         # Natural language Q&A
 │   │   ├── risk_controller.py
 │   │   └── notification_specialist.py
 │   ├── data/
