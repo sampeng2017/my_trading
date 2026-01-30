@@ -42,15 +42,7 @@ paths:
   logs: "logs"
 
 # Watchlist (symbols to monitor)
-watchlist:
-  - AAPL
-  - MSFT
-  - GOOGL
-  - AMZN
-  - TSLA
-  - NVDA
-  - META
-  - NFLX
+watchlist: []
 
 # AI Configuration
 ai:
