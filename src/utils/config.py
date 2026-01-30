@@ -9,6 +9,10 @@ import re
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file immediately
+load_dotenv()
 
 
 def _substitute_env_vars(value: Any) -> Any:
