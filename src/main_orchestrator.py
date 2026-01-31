@@ -195,10 +195,10 @@ class TradingOrchestrator:
         
         # Update market data
         logger.info("Updating market data...")
-        market_data = self.market.scan_symbols(symbols)
+        self.market.scan_symbols(symbols)
         
         # Check for recent news
-        news_analyses = self.news.analyze_batch(symbols)
+        self.news.analyze_batch(symbols)
         
         # Generate recommendations
         logger.info("Generating recommendations...")
