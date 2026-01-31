@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Any
 import logging
 import time
 
-from utils.gemini_client import call_with_retry
+from src.utils.gemini_client import call_with_retry
 
 logger = logging.getLogger(__name__)
 

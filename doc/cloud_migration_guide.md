@@ -317,153 +317,208 @@ else:
 # Add to requirements.txt
 cat >> requirements.txt << 'EOF'
 fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.6
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+httpx>=0.27.0
 EOF
 
 # Install
-pip install fastapi uvicorn python-multipart
+pip install fastapi uvicorn python-multipart httpx
 ```
 
 ### Step 2.2: Create API Structure
 
 ```bash
-mkdir -p src/api/routes
+mkdir -p src/api/routers
 touch src/api/__init__.py
-touch src/api/routes/__init__.py
+touch src/api/routers/__init__.py
 ```
 
-### Step 2.3: Authentication (CRITICAL for Cloud)
+### Step 2.3: Authentication (API Key Only)
 
-**Security Warning**: Without authentication, anyone can trigger trades or approve recommendations.
+For Phase 2, we implement a **Secure by Default** approach using a strict API Key strategy. OAuth is deferred to Phase 3 (Web Dashboard).
 
-This system uses **two authentication methods**:
-1. **GitHub OAuth** - For dashboard (browser) access
-2. **API Key** - For CLI/programmatic access
+- **Method**: `X-API-Key` Header
+- **Scope**: Global (All endpoints protected)
+- **Safety**: No default keys allowed in production
 
----
-
-#### 2.3.1: Create GitHub OAuth App
-
-1. Go to https://github.com/settings/developers
-2. Click "New OAuth App"
-3. Fill in:
-   - **Application name**: `Trading System`
-   - **Homepage URL**: `http://localhost:8000` (update for production)
-   - **Authorization callback URL**: `http://localhost:8000/auth/callback`
-4. Click "Register application"
-5. Copy the **Client ID**
-6. Click "Generate a new client secret" and copy it
+#### 2.3.1: Configure Environment
 
 Add to `.env`:
 ```bash
-# GitHub OAuth
-GITHUB_CLIENT_ID=your-client-id
-GITHUB_CLIENT_SECRET=your-client-secret
-GITHUB_ALLOWED_USERS=your-github-username
-
-# Session secret (for cookie signing)
-SESSION_SECRET=your-random-secret-here
-
-# API Key (for CLI access)
-API_SECRET_KEY=your-api-key-here
+# API Security
+API_KEY=your-secure-random-key-here
 ```
 
-**Notes on `GITHUB_ALLOWED_USERS`:**
-- Required - if empty, no one can log in
-- Comma-separated for multiple users: `user1,user2,user3`
-- Spaces around commas are OK: `user1, user2` (whitespace is trimmed)
-- Use exact GitHub usernames (case-sensitive)
-
-Generate secrets:
+Generate a secure key:
 ```bash
-python -c "import secrets; print('SESSION_SECRET=' + secrets.token_urlsafe(32))"
-python -c "import secrets; print('API_SECRET_KEY=' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('API_KEY=' + secrets.token_urlsafe(32))"
 ```
 
----
+#### 2.3.2: Create Auth Dependency
 
-#### 2.3.2: Install Auth Dependencies
+**`src/api/dependencies.py`**:
 
-```bash
-echo "authlib>=1.3.0" >> requirements.txt
-echo "itsdangerous>=2.1.0" >> requirements.txt
-echo "httpx>=0.26.0" >> requirements.txt
-pip install authlib itsdangerous httpx
+```python
+import os
+from fastapi import Header, HTTPException, status
+from typing import Optional
+
+async def verify_api_key(x_api_key: Optional[str] = Header(None)):
+   api_key = os.getenv("API_KEY")
+   
+   if not api_key:
+       raise HTTPException(
+           status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+           detail="Server Authorization Misconfigured"
+       )
+   
+   if x_api_key is None or x_api_key != api_key:
+       raise HTTPException(
+           status_code=status.HTTP_401_UNAUTHORIZED,
+           detail="Invalid or Missing API Key"
+       )
+   return x_api_key
 ```
 
----
+### Step 2.4: Create API Files
 
-#### 2.3.3: Create Auth Module
-
-**Create `src/api/auth.py`:**
+**`src/api/main.py`** - Main FastAPI application
 
 ```python
 """
-Authentication for Trading System API.
-
-- GitHub OAuth for dashboard (browser) access
-- API Key for CLI/programmatic access
-
-IMPORTANT: Environment variables must be set BEFORE importing this module.
-The app should call load_dotenv() early (see main.py setup).
+Trading System API
 """
 import os
-from typing import Optional, List
-from fastapi import HTTPException, Request, Security, status, Depends
-from fastapi.security import APIKeyHeader
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from src.api.routers import market, portfolio, agent
+from src.api.dependencies import verify_api_key
+from fastapi import Depends
+
+# Load env vars
+load_dotenv()
+
+app = FastAPI(title="Trading System API")
+
+# CORS (Secure configuration)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict this in production
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include Routers - All protected by verify_api_key for Phase 2
+app.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(verify_api_key)])
+app.include_router(market.router, prefix="/market", tags=["market"], dependencies=[Depends(verify_api_key)])
+app.include_router(agent.router, prefix="/agent", tags=["agent"], dependencies=[Depends(verify_api_key)])
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "version": "1.0.0"}
+```
+
+**`src/api/routers/portfolio.py`** (Example with DI)
+
+```python
+from fastapi import APIRouter, Depends
+from src.agents.portfolio_accountant import PortfolioAccountant
+from src.api.dependencies import get_portfolio_accountant
+
+# Note: Auth dependencies are applied at the router level in main.py
+router = APIRouter()
+
+@router.get("/summary")
+async def get_summary(pa: PortfolioAccountant = Depends(get_portfolio_accountant)):
+    return pa.get_portfolio_summary()
+```
+
+---
+
+### Step 2.5: Run API Locally
+
+```bash
+# Start development server
+uvicorn src.api.main:app --reload --port 8000
+
+# Test public endpoints
+curl http://localhost:8000/health
+
+# Test protected endpoints via API key
+curl -H "X-API-Key: your-secure-key" http://localhost:8000/portfolio/summary
+```
+
+> **Transition Context**: Phase 3 will introduce GitHub OAuth for the web dashboard. Until then, use the API key for all programmatic access.
+
+---
+
+## Phase 3: Web Dashboard & OAuth
+
+This phase introduces a browser-based dashboard authenticated via GitHub OAuth.
+
+> **Auth Coexistence**: API routes (`/portfolio`, `/market`, `/agent`) remain protected by `X-API-Key` for programmatic access. Dashboard routes use OAuth session for browser-based access. The dashboard fetches data server-side, so no API key is needed in the browser.
+
+### Step 3.1: Install Auth & Template Dependencies
+
+```bash
+# Add to requirements.txt
+cat >> requirements.txt << 'EOF'
+authlib>=1.3.0
+itsdangerous>=2.1.0
+jinja2>=3.1.0
+EOF
+
+# Install (note: httpx already installed from Phase 2)
+pip install authlib itsdangerous jinja2
+```
+
+### Step 3.2: Configure GitHub OAuth
+
+1. Go to https://github.com/settings/developers
+2. "New OAuth App":
+   - **Name**: `Trading System`
+   - **Homepage**: `http://localhost:8000`
+   - **Callback URL**: `http://localhost:8000/auth/callback`
+3. Copy **Client ID** and generate **Client Secret**.
+
+Add to `.env`:
+```bash
+# OAuth Config
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
+GITHUB_ALLOWED_USERS=your-github-username
+SESSION_SECRET=your-random-secret
+```
+
+Generate session secret:
+```bash
+python -c "import secrets; print('SESSION_SECRET=' + secrets.token_urlsafe(32))"
+```
+
+### Step 3.3: Implement Auth Module
+
+**`src/api/auth.py`**:
+
+```python
+import os
+from typing import Optional
+from fastapi import Request
 from authlib.integrations.starlette_client import OAuth
-
-# === Configuration ===
-
-def get_allowed_users() -> List[str]:
-    """Parse allowed users, stripping whitespace."""
-    raw = os.environ.get('GITHUB_ALLOWED_USERS', '')
-    if not raw.strip():
-        return []
-    # Strip whitespace from each username (handles "user1, user2")
-    return [u.strip() for u in raw.split(',') if u.strip()]
 
 def get_config():
     return {
         'github_client_id': os.environ.get('GITHUB_CLIENT_ID'),
         'github_client_secret': os.environ.get('GITHUB_CLIENT_SECRET'),
-        'allowed_users': get_allowed_users(),
-        'api_key': os.environ.get('API_SECRET_KEY'),
+        'allowed_users': [u.strip() for u in os.environ.get('GITHUB_ALLOWED_USERS', '').split(',')],
         'session_secret': os.environ.get('SESSION_SECRET'),
     }
 
-def validate_config():
-    """Validate required config at startup. Call this early."""
-    config = get_config()
-    errors = []
-
-    if not config['session_secret']:
-        errors.append("SESSION_SECRET is required")
-    if not config['github_client_id']:
-        errors.append("GITHUB_CLIENT_ID is required")
-    if not config['github_client_secret']:
-        errors.append("GITHUB_CLIENT_SECRET is required")
-    if not config['allowed_users']:
-        errors.append("GITHUB_ALLOWED_USERS is required (comma-separated GitHub usernames)")
-    if not config['api_key']:
-        errors.append("API_SECRET_KEY is required")
-
-    if errors:
-        raise RuntimeError("Missing required environment variables:\n  - " + "\n  - ".join(errors))
-
-# === GitHub OAuth ===
-# Note: OAuth is registered lazily in init_oauth() to allow env vars to be loaded first
-
 oauth = OAuth()
-_oauth_initialized = False
 
 def init_oauth():
-    """Initialize OAuth after env vars are loaded. Call once at startup."""
-    global _oauth_initialized
-    if _oauth_initialized:
-        return
-
     oauth.register(
         name='github',
         client_id=os.environ.get('GITHUB_CLIENT_ID'),
@@ -473,56 +528,16 @@ def init_oauth():
         api_base_url='https://api.github.com/',
         client_kwargs={'scope': 'read:user'},
     )
-    _oauth_initialized = True
 
 async def get_current_user(request: Request) -> Optional[dict]:
-    """Get current user from session (for dashboard)."""
     return request.session.get('user')
-
-async def require_login(request: Request) -> dict:
-    """Require authenticated user (for protected dashboard routes)."""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please login.",
-        )
-    return user
-
-# === API Key Auth ===
-
-API_KEY_NAME = "X-API-Key"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
-
-async def verify_api_key(api_key: str = Security(api_key_header)) -> str:
-    """Verify API key (for CLI/programmatic access)."""
-    config = get_config()
-
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key. Include X-API-Key header.",
-        )
-
-    if api_key != config['api_key']:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key",
-        )
-
-    return api_key
-
 ```
 
----
+### Step 3.4: Implement Auth Routes
 
-#### 2.3.4: Add Auth Routes
-
-**Create `src/api/routes/auth.py`:**
+**`src/api/routers/auth.py`**:
 
 ```python
-"""GitHub OAuth login routes."""
-import os
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from src.api.auth import oauth, get_config
@@ -531,309 +546,66 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/login")
 async def login(request: Request):
-    """Redirect to GitHub for login."""
     redirect_uri = request.url_for('auth_callback')
     return await oauth.github.authorize_redirect(request, redirect_uri)
 
 @router.get("/callback")
 async def auth_callback(request: Request):
-    """Handle GitHub OAuth callback."""
     token = await oauth.github.authorize_access_token(request)
     resp = await oauth.github.get('user', token=token)
     user_data = resp.json()
-
-    # Check if user is allowed
+    
     config = get_config()
     if user_data['login'] not in config['allowed_users']:
         return RedirectResponse(url="/?error=unauthorized")
-
-    # Store user in session
-    request.session['user'] = {
-        'username': user_data['login'],
-        'name': user_data.get('name'),
-        'avatar': user_data.get('avatar_url'),
-    }
-
+    
+    request.session['user'] = {'username': user_data['login']}
     return RedirectResponse(url="/")
 
 @router.get("/logout")
 async def logout(request: Request):
-    """Clear session and logout."""
     request.session.clear()
     return RedirectResponse(url="/")
 ```
 
----
+### Step 3.5: Update Main Application
 
-#### 2.3.5: Configure FastAPI App
-
-**Update `src/api/main.py`:**
+Update **`src/api/main.py`** to include session middleware and auth routes:
 
 ```python
-"""
-Trading System API
-
-IMPORTANT: load_dotenv() must be called BEFORE importing auth module.
-"""
-import os
-
-# Load environment variables FIRST, before any other imports
-from dotenv import load_dotenv
-load_dotenv()
-
-from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
+from src.api.auth import init_oauth
+from src.api.routers import auth
+from src.dashboard import routes as dashboard  # Dashboard router
 
-def is_dev_mode() -> bool:
-    """
-    Check if running in development mode.
+# ... existing app setup ...
 
-    DEV_MODE is blocked when:
-    - Railway's PORT env var is set (indicates cloud deployment)
+# Add Session Middleware (BEFORE routers)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET"))
 
-    This prevents accidentally enabling dev mode in production.
-    """
-    dev_flag = os.environ.get('DEV_MODE', '').lower() == 'true'
-    if not dev_flag:
-        return False
+# Initialize OAuth
+init_oauth()
 
-    # Railway (and most cloud platforms) set PORT - if set, we're in production
-    if os.environ.get('PORT'):
-        print("⚠️  DEV_MODE ignored - PORT is set (cloud deployment detected)")
-        return False
+# Include Auth Router (NOT protected by API Key)
+app.include_router(auth.router)
 
-    return True
-
-DEV_MODE = is_dev_mode()
-
-if DEV_MODE:
-    print("=" * 60)
-    print("⚠️  DEVELOPMENT MODE ACTIVE")
-    print("   - Authentication is disabled")
-    print("   - All endpoints accessible without login")
-    print("   - NEVER deploy with DEV_MODE=true")
-    print("=" * 60)
-else:
-    # Production: validate and initialize auth
-    from src.api.auth import validate_config, init_oauth
-    validate_config()
-    init_oauth()
-
-app = FastAPI(title="Trading System API")
-
-# Session middleware
-session_secret = os.environ.get('SESSION_SECRET', 'dev-secret-local-only' if DEV_MODE else None)
-if not session_secret:
-    raise RuntimeError("SESSION_SECRET required")
-
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=session_secret,
-)
-
-# Always include auth routes (so /auth/login doesn't 404 in dev mode)
-# In dev mode, login will work but isn't required
-from src.api.routes.auth import router as auth_router
-app.include_router(auth_router)
+# Include Dashboard Router (NOT protected by API Key - uses OAuth session)
+# Note: Dashboard fetches data server-side via direct agent calls, NOT via API endpoints
+app.include_router(dashboard.router, tags=["dashboard"])
 ```
 
-**Startup behavior**:
-- **Production**: Validates all env vars, fails fast if missing
-- **Development** (`DEV_MODE=true` + localhost): Skips auth validation, endpoints accessible without login
+> **Key Point**: The dashboard router is included *without* the `dependencies=[Depends(verify_api_key)]` parameter. It uses OAuth session for auth and accesses data via direct Python imports, bypassing the API layer entirely.
 
-**Safety**: `DEV_MODE=true` is ignored if Railway's `PORT` env var is set or if not running on localhost. This prevents accidental production exposure.
-
----
-
-#### 2.3.6: Development Mode Auth Bypass
-
-**Update `src/api/auth.py`** - **REPLACE** the `require_auth` function with this version that includes dev mode support:
-
-```python
-# === Development Mode Support ===
-# NOTE: This is_dev_mode() must match the one in main.py exactly
-
-def is_dev_mode() -> bool:
-    """
-    Check if running in development mode.
-
-    DEV_MODE is blocked when:
-    - Railway's PORT env var is set (indicates cloud deployment)
-
-    This prevents accidentally enabling dev mode in production.
-    """
-    dev_flag = os.environ.get('DEV_MODE', '').lower() == 'true'
-    if not dev_flag:
-        return False
-
-    # Railway (and most cloud platforms) set PORT - if set, we're in production
-    if os.environ.get('PORT'):
-        return False
-
-    return True
-
-
-# REPLACES the earlier require_auth function in this file
-async def require_auth(
-    request: Request,
-    api_key: str = Security(api_key_header)
-) -> dict:
-    """
-    Unified auth dependency for protected endpoints.
-
-    - In DEV_MODE (local only): returns dev user, no auth required
-    - In production: requires OAuth session OR API key
-    """
-    if is_dev_mode():
-        return {'method': 'dev_mode', 'user': {'username': 'dev_user'}}
-
-    # Try session first (dashboard)
-    user = request.session.get('user')
-    if user:
-        return {'method': 'oauth', 'user': user}
-
-    # Try API key (CLI)
-    config = get_config()
-    if api_key and api_key == config['api_key']:
-        return {'method': 'api_key'}
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required. Login or provide X-API-Key header.",
-    )
-```
-
-**Important**:
-- Delete the earlier `require_auth` function from section 2.3.3 when adding this one
-- The `is_dev_mode()` function appears in both `main.py` and `auth.py` - keep them identical
-- Optional refactor: move `is_dev_mode()` to `src/api/config.py` and import in both files
-
----
-
-#### 2.3.7: Local Testing Quick Start
-
-**Minimal `.env` for local development:**
-
-```bash
-# Just set dev mode - no OAuth/API keys needed
-DEV_MODE=true
-DB_MODE=local
-```
-
-**Run locally:**
-
-```bash
-# Start the API (no auth required in dev mode)
-uvicorn src.api.main:app --reload --port 8000
-
-# All endpoints work without authentication:
-curl http://localhost:8000/api/portfolio
-curl -X POST http://localhost:8000/api/run
-open http://localhost:8000  # Dashboard works too
-```
-
-**What works in dev mode:**
-- All API endpoints (no auth required)
-- Dashboard pages (no login required)
-- `/auth/login` and `/auth/logout` still work (useful for testing OAuth flow)
-- Login is optional - you can use the dashboard without logging in
-
-**Full local testing with auth (optional):**
-
-If you want to test the full OAuth flow locally:
-1. Create a GitHub OAuth App with callback `http://localhost:8000/auth/callback`
-2. Set all env vars in `.env`
-3. Set `DEV_MODE=false` (or remove it)
-
----
-
-### Step 2.4: Create API Files
-
-**`src/api/main.py`** - Main FastAPI application
-
-**`src/api/routes/portfolio.py`** - Portfolio endpoints
-- GET /api/portfolio - Current holdings (public read-only)
-- GET /api/portfolio/history - Historical snapshots (public read-only)
-
-**`src/api/routes/recommendations.py`** - Trade recommendations
-- GET /api/recommendations - List recommendations (public read-only)
-- POST /api/recommendations/{id}/approve - **Requires auth** (OAuth or API key)
-- POST /api/recommendations/{id}/reject - **Requires auth** (OAuth or API key)
-
-**`src/api/routes/system.py`** - System control
-- GET /api/status - System status (public read-only)
-- POST /api/run - **Requires auth** (OAuth or API key)
-- GET /api/runs - Run history (public read-only)
-
-**Example protected route:**
-
-```python
-from fastapi import APIRouter, Depends
-from src.api.auth import require_auth
-
-router = APIRouter()
-
-@router.post("/api/run")
-async def trigger_run(auth: dict = Depends(require_auth)):
-    """
-    Trigger orchestrator run.
-
-    Authentication (handled automatically by require_auth):
-    - DEV_MODE: No auth needed, returns dev_user
-    - Production: Requires OAuth session OR X-API-Key header
-    """
-    # ... run orchestrator
-    return {"status": "started", "triggered_by": auth}
-```
-
-**Note**: `require_auth` automatically checks for dev mode. No special handling needed in routes.
-
-### Step 2.5: Run API Locally
-
-```bash
-# Start development server
-uvicorn src.api.main:app --reload --port 8000
-
-# Test public endpoints
-curl http://localhost:8000/api/portfolio
-curl http://localhost:8000/api/status
-
-# Test protected endpoints via API key
-curl -X POST http://localhost:8000/api/run \
-  -H "X-API-Key: your-secret-key"
-
-# Test OAuth flow
-# 1. Open http://localhost:8000/auth/login in browser
-# 2. Authorize with GitHub
-# 3. Now protected dashboard actions work
-```
-
----
-
-## Phase 3: Web Dashboard
-
-The dashboard uses GitHub OAuth for authentication (configured in Phase 2).
-
-**Access levels:**
-- **Not logged in**: View portfolio, recommendations, status (read-only)
-- **Logged in (your GitHub account)**: Trigger runs, approve/reject trades
-
-### Step 3.1: Create Dashboard Structure
+### Step 3.6: Create Dashboard Structure
 
 ```bash
 mkdir -p src/dashboard/templates
 mkdir -p src/dashboard/static/css
 touch src/dashboard/__init__.py
+touch src/dashboard/routes.py  # Dashboard routes (defined in Step 3.8)
 ```
 
-### Step 3.2: Install Template Dependencies
-
-```bash
-echo "jinja2>=3.1.0" >> requirements.txt
-pip install jinja2
-```
-
-### Step 3.3: Create Templates
+### Step 3.7: Create Templates
 
 **`src/dashboard/templates/base.html`** - Base layout with login/logout button
 
@@ -860,14 +632,15 @@ pip install jinja2
 
 **`src/dashboard/templates/index.html`** - Dashboard home
 **`src/dashboard/templates/portfolio.html`** - Holdings view
-**`src/dashboard/templates/recommendations.html`** - Trade recommendations with approve/reject buttons (shown only when logged in)
+**`src/dashboard/templates/recommendations.html`** - Trade recommendations
 
-### Step 3.4: Add Dashboard Routes to FastAPI
+### Step 3.8: Add Dashboard Routes to FastAPI
 
 ```python
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 from src.api.auth import get_current_user
+from src.api.dependencies import get_portfolio_accountant  # Server-side data access
 
 router = APIRouter()
 templates = Jinja2Templates(directory="src/dashboard/templates")
@@ -875,13 +648,17 @@ templates = Jinja2Templates(directory="src/dashboard/templates")
 @router.get("/")
 async def dashboard_home(request: Request):
     user = await get_current_user(request)
+    # Server-side data fetch (no API key needed in browser)
+    pa = get_portfolio_accountant()
+    portfolio = pa.get_portfolio_summary()
     return templates.TemplateResponse("index.html", {
         "request": request,
-        "user": user,  # None if not logged in
+        "user": user,
+        "portfolio": portfolio,
     })
 ```
 
-### Step 3.5: Test Dashboard
+### Step 3.9: Test Dashboard
 
 ```bash
 # Start server
@@ -891,7 +668,7 @@ uvicorn src.api.main:app --reload --port 8000
 open http://localhost:8000
 
 # Test flow:
-# 1. View portfolio (no login required)
+# 1. View portfolio (server-side rendering, no API key needed)
 # 2. Click "Login with GitHub"
 # 3. Authorize the app
 # 4. Now you can trigger runs and approve trades
@@ -969,7 +746,7 @@ railway link
 ```bash
 # Generate secrets first
 python -c "import secrets; print('SESSION_SECRET=' + secrets.token_urlsafe(32))"
-python -c "import secrets; print('API_SECRET_KEY=' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('API_KEY=' + secrets.token_urlsafe(32))"
 
 # Database
 railway variables set DB_MODE=turso
@@ -981,7 +758,7 @@ railway variables set GITHUB_CLIENT_ID="your-github-client-id"
 railway variables set GITHUB_CLIENT_SECRET="your-github-client-secret"
 railway variables set GITHUB_ALLOWED_USERS="your-github-username"  # No spaces if multiple: user1,user2
 railway variables set SESSION_SECRET="your-generated-session-secret"
-railway variables set API_SECRET_KEY="your-generated-api-key"
+railway variables set API_KEY="your-generated-api-key"
 
 # Trading APIs
 railway variables set GEMINI_API_KEY="your-gemini-key"
@@ -1108,30 +885,31 @@ ns.send_email('Test from cloud', 'This is a test email.')
 - [ ] Can query Turso from Python
 
 ### Phase 2 Complete
-- [ ] FastAPI installed
-- [ ] API routes created
-- [ ] GitHub OAuth App created
-- [ ] Auth dependencies installed (`authlib`, `itsdangerous`, `httpx`)
-- [ ] Environment variables set: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_ALLOWED_USERS`, `SESSION_SECRET`, `API_SECRET_KEY`
-- [ ] `/api/portfolio` returns data (public)
-- [ ] `/api/recommendations` returns data (public)
-- [ ] `/api/status` returns system info (public)
-- [ ] `/api/run` rejects unauthenticated requests (returns 401)
-- [ ] `/api/run` works with valid API key in `X-API-Key` header
-- [ ] `/auth/login` redirects to GitHub
-- [ ] After GitHub login, session is created
-
-### Phase 3 Complete
-- [ ] Templates created
-- [ ] Dashboard accessible at `http://localhost:8000`
-- [ ] Can view portfolio on phone browser
-- [ ] Can view recommendations on phone
-- [ ] Can trigger runs from dashboard
+ - [ ] FastAPI installed
+ - [ ] API structure created (`src/api/routers`)
+ - [ ] Security: `API_KEY` set in environment
+ - [ ] Dependencies installed (`fastapi`, `uvicorn`, `httpx`)
+ - [ ] `/portfolio/summary` returns data (via API Key)
+ - [ ] `/market/price/{symbol}` returns data (via API Key)
+ - [ ] `/health` returns system info (Public)
+ - [ ] `/portfolio/*`, `/market/*`, `/agent/*` return 401 if key missing
+ - [ ] Unit tests passing with `API_KEY` set
+ 
+ ### Phase 3 Complete
+ - [ ] Auth dependencies installed (`authlib`, `itsdangerous`, `jinja2`) + `httpx` from Phase 2
+ - [ ] GitHub OAuth App created & Client ID/Secret saved
+ - [ ] `SESSION_SECRET` set
+ - [ ] Configuration updated with `GITHUB_ALLOWED_USERS`
+ - [ ] Authentication logic implemented (`src/api/auth.py`)
+ - [ ] Dashboard templates created
+ - [ ] `/auth/login` redirects to GitHub
+ - [ ] Dashboard accessible at `http://localhost:8000`
+ - [ ] Can view portfolio on browser (Login required for actions)
 
 ### Phase 4 Complete
 - [ ] Railway account created
 - [ ] Project deployed
-- [ ] Environment variables set in Railway (including `API_SECRET_KEY`)
+- [ ] Environment variables set in Railway (including `API_KEY`)
 - [ ] App accessible at Railway URL
 - [ ] **Security check**: `/api/run` without API key returns 401
 - [ ] **Security check**: `/api/run` with API key works
@@ -1213,7 +991,7 @@ RuntimeError: Missing required environment variables:
 - `GITHUB_CLIENT_ID` - From GitHub OAuth App
 - `GITHUB_CLIENT_SECRET` - From GitHub OAuth App
 - `GITHUB_ALLOWED_USERS` - Your GitHub username(s)
-- `API_SECRET_KEY` - Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+- `API_KEY` - Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 
 ### GitHub Login Fails / "Unauthorized" After Login
 

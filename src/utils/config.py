@@ -125,3 +125,13 @@ def reload_config() -> Dict[str, Any]:
     global _config_cache
     _config_cache = load_config()
     return _config_cache
+
+class Config:
+    """Wrapper class for configuration to maintain compatibility."""
+    
+    def __init__(self):
+        self.config = get_config()
+        
+    def get_agent_config(self, agent_name: str) -> Dict[str, Any]:
+        """Get configuration for specific agent."""
+        return self.config.get('agents', {}).get(agent_name, {})

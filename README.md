@@ -23,55 +23,63 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 ---
 
 ## Features
-
-- **Dynamic Stock Discovery**: Automatic screening via Alpaca/Alpha Vantage + **LLM Re-ranking**
-- **Portfolio Tracking**: Automatic import of Fidelity CSV exports with trade inference via state diffing
-- **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA)
-- **AI-Powered Insights**: Gemini AI for news sentiment, strategy recommendations, and **screener ranking**
-- **Trade Question Advisor**: Natural language Q&A about your portfolio and trades ("Should I sell MSFT at 480?")
-- **Risk Management**: Deterministic position sizing, volatility filters, and sector exposure limits
-- **Smart Notifications**: iMessage for urgent alerts, email for daily summaries
-- **macOS Automation**: `launchd` scheduling and file system watchdog for automatic imports
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ORCHESTRATOR                              │
-│              (Time-based mode: premarket/market/postmarket)      │
-└─────────────────────────────────────────────────────────────────┘
-                                 │
-   ┌─────────────┬───────────────┼───────────────┬─────────────┐
-   ▼             ▼               ▼               ▼             ▼
-┌────────┐ ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐
-│ Stock  │ │Portfolio │   │  Market  │   │   News   │   │Strategy│
-│Screener│ │Accountant│   │ Analyst  │   │ Analyst  │   │Planner │
-│(AI)    │ │          │   │          │   │          │   │        │
-│• Alpaca│ │• CSV     │   │• Prices  │   │• Finnhub │   │• CoT   │
-│• Gemini│ │• Holdings│   │• ATR/SMA │   │• Gemini  │   │• Recom │
-│• Rank  │ │• Diffing │   │• Volume  │   │• Sentiment│   │• Score │
-└────┬───┘ └────┬─────┘   └────┬─────┘   └────┬─────┘   └───┬────┘
-     │          │              │              │             │
-     └──────────┴──────────────┼──────────────┴─────────────┘
+ 
+ - **Rest API**: High-performance FastAPI backend with secure API Key authentication
+ - **Cloud Database**: Turso (libSQL) integration for cross-device data access
+ - **Dynamic Stock Discovery**: Automatic screening via Alpaca/Alpha Vantage + **LLM Re-ranking**
+ - **Portfolio Tracking**: Automatic import of Fidelity CSVs with trade inference via state diffing
+ - **Market Analysis**: Real-time price fetching with technical indicators (ATR, SMA)
+ - **AI-Powered Insights**: Gemini AI for news sentiment, strategy recommendations, and **screener ranking**
+ - **Trade Question Advisor**: Natural language Q&A about your portfolio and trades ("Should I sell MSFT at 480?")
+ - **Risk Management**: Deterministic position sizing, volatility filters, and sector exposure limits
+ - **Smart Notifications**: iMessage for urgent alerts, email for daily summaries
+ - **macOS Automation**: `launchd` scheduling and file system watchdog for automatic imports
+ 
+ ---
+ 
+ ## Architecture
+ 
+ ```
+ ┌─────────────────────────────────────────────────────────────────┐
+ │                        ORCHESTRATOR                              │
+ │              (Time-based mode: premarket/market/postmarket)      │
+ └─────────────────────────────────────────────────────────────────┘
+                                  │
+    ┌─────────────┬───────────────┼───────────────┬─────────────┐
+    ▼             ▼               ▼               ▼             ▼
+ ┌────────┐ ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐
+ │ Stock  │ │Portfolio │   │  Market  │   │   News   │   │Strategy│
+ │Screener│ │Accountant│   │ Analyst  │   │ Analyst  │   │Planner │
+ │(AI)    │ │          │   │          │   │          │   │        │
+ │• Alpaca│ │• CSV     │   │• Prices  │   │• Finnhub │   │• CoT   │
+ │• Gemini│ │• Holdings│   │• ATR/SMA │   │• Gemini  │   │• Recom │
+ │• Rank  │ │• Diffing │   │• Volume  │   │• Sentiment│   │• Score │
+ └────┬───┘ └────┬─────┘   └────┬─────┘   └────┬─────┘   └───┬────┘
+      │          │              │              │             │
+      └──────────┴──────────────┼──────────────┴─────────────┘
+                                ▼
+                     ┌──────────────────┐
+                     │  Risk Controller  │
+                     │                   │
+                     │ • Position Sizing │
+                     │ • Exposure Limits │
+                     │ • Stop-Loss Calc  │
+                     └─────────┬─────────┘
                                ▼
-                    ┌──────────────────┐
-                    │  Risk Controller  │
-                    │                   │
-                    │ • Position Sizing │
-                    │ • Exposure Limits │
-                    │ • Stop-Loss Calc  │
-                    └─────────┬─────────┘
-                              ▼
-                  ┌────────────────────┐
-                  │Notification Special│
-                  │                    │
-                  │ • iMessage (urgent)│
-                  │ • Email (summaries)│
-                  │ • Quiet Hours      │
-                  └────────────────────┘
-```
+ ┌──────────────┐     ┌────────────────────┐
+ │   REST API   │◄────┤Notification Special│
+ │  (FastAPI)   │     │                    │
+ │ • Portfolio  │     │ • iMessage (urgent)│
+ │ • Agents     │     │ • Email (summaries)│
+ │ • Market     │     │ • Quiet Hours      │
+ └──────┬───────┘     └────────────────────┘
+        │
+        ▼
+ ┌──────────────┐
+ │   Database   │
+ │ (Turso/Local)│
+ └──────────────┘
+ ```
 
 ### Agent Descriptions
 
@@ -103,116 +111,121 @@ SQLite database with 10 tables:
 ---
 
 ## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Language | Python 3.10+ |
-| Database | SQLite |
-| Market Data | Alpaca API → Yahoo Finance → Alpaca Quotes (fallback chain) |
-| Stock Screening | Alpaca Movers API → Alpha Vantage → **Gemini AI Re-ranking** |
-| News Data | Finnhub API |
-| AI | Google Gemini (gemini-2.5-flash) |
-| Notifications | macOS Messages (AppleScript), Gmail SMTP |
-| Scheduling | macOS launchd |
-| File Watching | watchdog library |
-
----
-
-## Prerequisites
-
-- **macOS** 12.0+ (for iMessage via AppleScript)
-- **Python** 3.10 or higher
-- **API Keys** (optional but recommended):
-  - [Alpaca](https://alpaca.markets/) - Market data + stock screening
-  - [Alpha Vantage](https://www.alphavantage.co/) - Backup screener (free: 25/day)
-  - [Finnhub](https://finnhub.io/) - News aggregation
-  - [Google Gemini](https://ai.google.dev/) - AI analysis
-  - Gmail App Password - Email notifications
-
----
-
-## Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/my_trading.git
-cd my_trading
-```
-
-### 2. Create Virtual Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-**Core dependencies:**
-```
-pandas>=2.0.0          # Data manipulation
-alpaca-py>=0.10.0      # Market data API
-google-generativeai    # Gemini AI
-requests>=2.31.0       # HTTP client
-watchdog>=3.0.0        # File system monitoring
-PyYAML>=6.0            # Configuration
-yfinance>=0.2.0        # Yahoo Finance fallback
-pytz>=2023.3           # Timezone handling
-pytest>=7.4.0          # Testing
-python-dotenv>=1.0.0   # Environment variables
-```
-
-### 4. Initialize Database
-
-```bash
-sqlite3 data/agent.db < data/init_schema.sql
-```
-
-Or run the integration test which auto-initializes:
-```bash
-python src/test_phase1.py
-```
-
----
-
-## Configuration
-
-### 1. Set Environment Variables
-
-Add to your `~/.zshrc` or `~/.bash_profile`:
-
-```bash
-# Required for AI features
-export GEMINI_API_KEY="your_gemini_api_key"
-
-# Optional: Market data + stock screening
-export ALPACA_API_KEY="your_alpaca_key"
-export ALPACA_SECRET_KEY="your_alpaca_secret"
-
-# Optional: Backup stock screener (25 calls/day free)
-export ALPHA_VANTAGE_API_KEY="your_alpha_vantage_key"
-
-# Optional: News aggregation
-export FINNHUB_API_KEY="your_finnhub_key"
-
-# Optional: Email notifications
-export GMAIL_USER="your_email@gmail.com"
-export GMAIL_APP_PASSWORD="your_app_password"
-export EMAIL_RECIPIENT="your_email@gmail.com"
-
-# Optional: iMessage
-export IMESSAGE_RECIPIENT="+1234567890"
-```
-
-Reload your shell:
-```bash
-source ~/.zshrc
-```
+ 
+ | Component | Technology |
+ |-----------|------------|
+ | Language | Python 3.10+ |
+ | Database | **Turso (libSQL)** or Local SQLite |
+ | API Backend | **FastAPI** + Uvicorn |
+ | Market Data | Alpaca API → Yahoo Finance → Alpaca Quotes (fallback chain) |
+ | Stock Screening | Alpaca Movers API → Alpha Vantage → **Gemini AI Re-ranking** |
+ | News Data | Finnhub API |
+ | AI | Google Gemini (gemini-2.5-flash) |
+ | Notifications | macOS Messages (AppleScript), Gmail SMTP |
+ | Scheduling | macOS launchd or Cloud Cron |
+ | File Watching | watchdog library |
+ 
+ ---
+ 
+ ## Prerequisites
+ 
+ - **Python** 3.10 or higher
+ - **Turso Account** (for cloud database)
+ - **macOS** 12.0+ (optional, for local iMessage)
+ - **API Keys** (optional but recommended):
+   - [Alpaca](https://alpaca.markets/) - Market data + stock screening
+   - [Alpha Vantage](https://www.alphavantage.co/) - Backup screener (free: 25/day)
+   - [Finnhub](https://finnhub.io/) - News aggregation
+   - [Google Gemini](https://ai.google.dev/) - AI analysis
+   - Gmail App Password - Email notifications
+ 
+ ---
+ 
+ ## Installation
+ 
+ ### 1. Clone the Repository
+ 
+ ```bash
+ git clone https://github.com/yourusername/my_trading.git
+ cd my_trading
+ ```
+ 
+ ### 2. Create Virtual Environment
+ 
+ ```bash
+ python3 -m venv venv
+ source venv/bin/activate
+ ```
+ 
+ ### 3. Install Dependencies
+ 
+ ```bash
+ pip install -r requirements.txt
+ ```
+ 
+ **Core dependencies:**
+ ```
+ pandas>=2.0.0          # Data manipulation
+ fastapi>=0.109.0       # REST API
+ uvicorn[standard]      # ASGI Server
+ libsql-experimental    # Turso Database client
+ google-generativeai    # Gemini AI
+ alpaca-py>=0.10.0      # Market data API
+ watchdog>=3.0.0        # File system monitoring
+ ```
+ 
+ ### 4. Initialize Database
+ 
+ See [doc/cloud_migration_guide.md](doc/cloud_migration_guide.md) for full Turso setup.
+ 
+ For local-only mode:
+ ```bash
+ sqlite3 data/agent.db < data/init_schema.sql
+ ```
+ 
+ ---
+ 
+ ## Configuration
+ 
+ ### 1. Set Environment Variables
+ 
+ Add to your `~/.zshrc` or `.env` file:
+ 
+ ```bash
+ # Security (Required for API)
+ export API_KEY="your-secure-random-key"
+ 
+ # Database (Turso Cloud or Local)
+ export DB_MODE="turso"  # or 'local'
+ export TURSO_DATABASE_URL="libsql://your-db.turso.io"
+ export TURSO_AUTH_TOKEN="your-turso-token"
+ 
+ # Required for AI features
+ export GEMINI_API_KEY="your_gemini_api_key"
+ 
+ # Optional: Market data + stock screening
+ export ALPACA_API_KEY="your_alpaca_key"
+ export ALPACA_SECRET_KEY="your_alpaca_secret"
+ 
+ # Optional: Backup stock screener (25 calls/day free)
+ export ALPHA_VANTAGE_API_KEY="your_alpha_vantage_key"
+ 
+ # Optional: News aggregation
+ export FINNHUB_API_KEY="your_finnhub_key"
+ 
+ # Optional: Email notifications
+ export GMAIL_USER="your_email@gmail.com"
+ export GMAIL_APP_PASSWORD="your_app_password"
+ export EMAIL_RECIPIENT="your_email@gmail.com"
+ 
+ # Optional: iMessage
+ export IMESSAGE_RECIPIENT="+1234567890"
+ ```
+ 
+ Reload your shell:
+ ```bash
+ source ~/.zshrc
+ ```
 
 ### 2. Configure `config/config.yaml`
 
@@ -324,201 +337,246 @@ python src/utils/watchdog_csv.py
 Drop CSV files into `inbox/` folder and they'll be imported automatically.
 
 ### Trade Question Advisor
-
-Ask natural language questions about your portfolio:
-
-```bash
-# Single question
-python scripts/ask_trade.py "Should I sell 100 shares of MSFT at 480?"
-
-# Interactive mode
-python scripts/ask_trade.py --interactive
-```
-
-The advisor uses your portfolio data, recent news, market data, and past recommendations to provide AI-powered suggestions with confidence levels.
-
----
-
-## Testing
-
-### Run All Tests
-
-```bash
-source venv/bin/activate
-python -m pytest tests/ -v
-```
-
-### Run Specific Test Files
-
-```bash
-# Portfolio Accountant tests
-python -m pytest tests/test_portfolio_accountant.py -v
-
-# Risk Controller tests
-python -m pytest tests/test_risk_controller.py -v
-```
-
-### Integration Test
-
-```bash
-python src/test_phase1.py
-```
-
-This test:
-1. Initializes the database
-2. Imports sample portfolio CSV
-3. Fetches live market data
-4. Displays portfolio with current prices
-
-Expected output:
-```
-============================================================
-         PORTFOLIO SNAPSHOT
-============================================================
-
-Symbol     Shares        Price          Value     Change
-------------------------------------------------------------
-AAPL           50 $    256.44 $   12,822.00  +3,899.50
-MSFT           20 $    481.63 $    9,632.60  +2,028.60
-...
-✅ Phase 1 Integration Test Completed Successfully!
-```
-
----
-
-## Maintenance
-
-### Daily Tasks
-
-- **Check logs**: `tail -f logs/stdout.log`
-- **Review notifications**: Check iMessage/email for alerts
-- **Update portfolio**: Export CSV from Fidelity → drop in `inbox/`
-
-### Weekly Tasks
-
-- **Clean old cache**: Remove market data older than 7 days
-  ```bash
-  sqlite3 data/agent.db "DELETE FROM market_data WHERE timestamp < datetime('now', '-7 days')"
-  ```
-- **Review risk decisions**: Check vetoed trades
-  ```bash
-  sqlite3 data/agent.db "SELECT * FROM risk_decisions WHERE approved = 0 ORDER BY timestamp DESC LIMIT 10"
-  ```
-
-### Monthly Tasks
-
-- **Update dependencies**:
-  ```bash
-  pip install --upgrade -r requirements.txt
-  ```
-- **Backup database**:
-  ```bash
-  cp data/agent.db data/backups/agent_$(date +%Y%m%d).db
-  ```
-- **Review performance metrics** in `strategy_recommendations` table
-
-### Log Rotation
-
-Add to crontab for weekly log rotation:
-```bash
-0 0 * * 0 mv ~/study/repo/my_trading/logs/stdout.log ~/study/repo/my_trading/logs/stdout.$(date +\%Y\%m\%d).log
-```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| "alpaca-py not installed" | Install with `pip install alpaca-py` or use yfinance fallback |
-| "Gemini not configured" | Set `GEMINI_API_KEY` environment variable |
-| "Finnhub API error: 401" | Check `FINNHUB_API_KEY` is valid |
-| iMessage not sending | Grant Terminal automation permissions in System Preferences |
-| "No market data" | Markets may be closed; data fetches during market hours |
-| Database locked | Close other SQLite connections; use WAL mode |
-
-### Enable Debug Logging
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-### Check Database State
-
-```bash
-# View recent snapshots
-sqlite3 data/agent.db "SELECT * FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 5"
-
-# View cached prices
-sqlite3 data/agent.db "SELECT symbol, price, timestamp FROM market_data ORDER BY timestamp DESC LIMIT 10"
-
-# View notification history
-sqlite3 data/agent.db "SELECT * FROM notification_log ORDER BY timestamp DESC LIMIT 10"
-```
-
-### Reset Database
-
-```bash
-rm data/agent.db
-sqlite3 data/agent.db < data/init_schema.sql
-```
-
----
-
-## Project Structure
-
-```
-my_trading/
-├── config/
-│   └── config.yaml           # Main configuration
-├── data/
-│   ├── init_schema.sql       # Database schema
-│   └── agent.db              # SQLite database (created at runtime)
-├── inbox/                    # Drop Fidelity CSVs here
-│   └── sample_portfolio.csv  # Sample file for testing
-├── launchd/
-│   └── com.user.stockagent.plist  # macOS scheduler config
-├── logs/                     # Log output directory
-├── scripts/                  # Helper scripts for common tasks
-│   ├── ask_trade.py          # Trade question advisor CLI
-│   ├── check_config.py       # Verify configuration
-│   ├── check_database.py     # View database status
-│   ├── import_portfolio.py   # Import Fidelity CSVs
-│   ├── run_system.py         # Run trading system
-│   ├── test_market_data.py   # Test market data fetching
-│   └── test_screener.py      # Test stock screener
-├── src/
-│   ├── agents/
-│   │   ├── stock_screener.py        # Dynamic stock discovery
-│   │   ├── portfolio_accountant.py
-│   │   ├── market_analyst.py
-│   │   ├── news_analyst.py
-│   │   ├── strategy_planner.py
-│   │   ├── trade_advisor.py         # Natural language Q&A
-│   │   ├── risk_controller.py
-│   │   └── notification_specialist.py
-│   ├── data/
-│   │   └── cache_manager.py
-│   ├── utils/
-│   │   ├── config.py
-│   │   └── watchdog_csv.py
-│   ├── main_orchestrator.py  # Main entry point
-│   └── test_phase1.py        # Integration test
-├── tests/
-│   ├── test_portfolio_accountant.py
-│   └── test_risk_controller.py
-├── requirements.txt
-└── README.md
-```
-
----
-
-## License
-
-This project is for personal use. Not financial advice. Use at your own risk.
+ 
+ Ask natural language questions about your portfolio:
+ 
+ ```bash
+ # Single question
+ python scripts/ask_trade.py "Should I sell 100 shares of MSFT at 480?"
+ 
+ # Interactive mode
+ python scripts/ask_trade.py --interactive
+ ```
+ 
+ The advisor uses your portfolio data, recent news, market data, and past recommendations to provide AI-powered suggestions with confidence levels.
+ 
+ ---
+ 
+ ## REST API Usage
+ 
+ The system provides a FastAPI-based REST API for programmatic access.
+ 
+ ### Start the Server
+ 
+ ```bash
+ uvicorn src.api.main:app --reload --port 8000
+ ```
+ 
+ ### Authentication
+ 
+ All endpoints require the `X-API-Key` header with the key defined in your environment.
+ 
+ ### Example Endpoints
+ 
+ | Endpoint | Method | Description |
+ |----------|--------|-------------|
+ | `/health` | GET | System status (Public) |
+ | `/portfolio/summary` | GET | Current holdings and value |
+ | `/market/prices/{symbol}` | GET | Real-time price and indicators |
+ | `/agent/ask` | POST | Ask the Trade Advisor a question |
+ 
+ ### Example Request
+ 
+ ```bash
+ curl -H "X-API-Key: your-secure-key" http://localhost:8000/portfolio/summary
+ ```
+ 
+ ---
+ 
+ ## Testing
+ 
+ ### Run All Tests
+ 
+ ```bash
+ source venv/bin/activate
+ python -m pytest tests/ -v
+ ```
+ 
+ ### Run Specific Test Files
+ 
+ ```bash
+ # API Tests
+ python -m pytest tests/test_api.py -v
+ 
+ # Portfolio Accountant tests
+ python -m pytest tests/test_portfolio_accountant.py -v
+ ```
+ 
+ ### Integration Test
+ 
+ ```bash
+ python src/test_phase1.py
+ ```
+ 
+ This test:
+ 1. Initializes the database
+ 2. Imports sample portfolio CSV
+ 3. Fetches live market data
+ 4. Displays portfolio with current prices
+ 
+ Expected output:
+ ```
+ ============================================================
+          PORTFOLIO SNAPSHOT
+ ============================================================
+ 
+ Symbol     Shares        Price          Value     Change
+ ------------------------------------------------------------
+ AAPL           50 $    256.44 $   12,822.00  +3,899.50
+ MSFT           20 $    481.63 $    9,632.60  +2,028.60
+ ...
+ ✅ Phase 1 Integration Test Completed Successfully!
+ ```
+ 
+ ---
+ 
+ ## Maintenance
+ 
+ ### Daily Tasks
+ 
+ - **Check logs**: `tail -f logs/stdout.log`
+ - **Review notifications**: Check iMessage/email for alerts
+ - **Update portfolio**: Export CSV from Fidelity → drop in `inbox/`
+ 
+ ### Weekly Tasks
+ 
+ - **Clean old cache**: Remove market data older than 7 days
+   ```bash
+   sqlite3 data/agent.db "DELETE FROM market_data WHERE timestamp < datetime('now', '-7 days')"
+   ```
+ - **Review risk decisions**: Check vetoed trades
+   ```bash
+   sqlite3 data/agent.db "SELECT * FROM risk_decisions WHERE approved = 0 ORDER BY timestamp DESC LIMIT 10"
+   ```
+ 
+ ### Monthly Tasks
+ 
+ - **Update dependencies**:
+   ```bash
+   pip install --upgrade -r requirements.txt
+   ```
+ - **Backup database**:
+   ```bash
+   # Local Mode
+   cp data/agent.db data/backups/agent_$(date +%Y%m%d).db
+   
+   # Turso Mode
+   turso db shell trading-system ".dump" > data/backups/turso_$(date +%Y%m%d).sql
+   ```
+ - **Review performance metrics** in `strategy_recommendations` table
+ 
+ ### Log Rotation
+ 
+ Add to crontab for weekly log rotation:
+ ```bash
+ 0 0 * * 0 mv ~/study/repo/my_trading/logs/stdout.log ~/study/repo/my_trading/logs/stdout.$(date +\%Y\%m\%d).log
+ ```
+ 
+ ---
+ 
+ ## Troubleshooting
+ 
+ ### Common Issues
+ 
+ | Issue | Solution |
+ |-------|----------|
+ | "alpaca-py not installed" | Install with `pip install alpaca-py` or use yfinance fallback |
+ | "Gemini not configured" | Set `GEMINI_API_KEY` environment variable |
+ | "Finnhub API error: 401" | Check `FINNHUB_API_KEY` is valid |
+ | iMessage not sending | Grant Terminal automation permissions in System Preferences |
+ | "No market data" | Markets may be closed; data fetches during market hours |
+ | Database locked | Close other SQLite connections; use WAL mode |
+ | "Missing API Key" | Set `API_KEY` env var for REST API usage |
+ 
+ ### Enable Debug Logging
+ 
+ ```python
+ import logging
+ logging.basicConfig(level=logging.DEBUG)
+ ```
+ 
+ ### Check Database State
+ 
+ ```bash
+ # View recent snapshots
+ sqlite3 data/agent.db "SELECT * FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 5"
+ 
+ # View cached prices
+ sqlite3 data/agent.db "SELECT symbol, price, timestamp FROM market_data ORDER BY timestamp DESC LIMIT 10"
+ 
+ # View notification history
+ sqlite3 data/agent.db "SELECT * FROM notification_log ORDER BY timestamp DESC LIMIT 10"
+ ```
+ 
+ ### Reset Database
+ 
+ ```bash
+ rm data/agent.db
+ sqlite3 data/agent.db < data/init_schema.sql
+ ```
+ 
+ ---
+ 
+ ## Project Structure
+ 
+ ```
+ my_trading/
+ ├── config/
+ │   └── config.yaml           # Main configuration
+ ├── data/
+ │   ├── init_schema.sql       # Database schema
+ │   └── agent.db              # SQLite database (created at runtime)
+ ├── doc/
+ │   ├── cloud_migration_guide.md # Full guide for Cloud/API setup
+ │   └── SETUP_GUIDE.md        # Original setup guide
+ ├── inbox/                    # Drop Fidelity CSVs here
+ │   └── sample_portfolio.csv  # Sample file for testing
+ ├── launchd/
+ │   └── com.user.stockagent.plist  # macOS scheduler config
+ ├── logs/                     # Log output directory
+ ├── scripts/                  # Helper scripts for common tasks
+ │   ├── ask_trade.py          # Trade question advisor CLI
+ │   ├── check_config.py       # Verify configuration
+ │   ├── check_database.py     # View database status
+ │   ├── import_portfolio.py   # Import Fidelity CSVs
+ │   ├── run_system.py         # Run trading system
+ │   ├── test_market_data.py   # Test market data fetching
+ │   └── test_screener.py      # Test stock screener
+ ├── src/
+ │   ├── agents/               # Logic Agents
+ │   │   ├── stock_screener.py
+ │   │   ├── portfolio_accountant.py
+ │   │   ├── market_analyst.py
+ │   │   ├── news_analyst.py
+ │   │   ├── strategy_planner.py
+ │   │   ├── trade_advisor.py
+ │   │   ├── risk_controller.py
+ │   │   └── notification_specialist.py
+ │   ├── api/                  # REST API
+ │   │   ├── routers/          # API Endpoints
+ │   │   ├── dependencies.py
+ │   │   └── main.py
+ │   ├── data/
+ │   │   ├── cache_manager.py
+ │   │   └── db_connection.py  # Turso/SQLite adapter
+ │   ├── utils/
+ │   │   ├── config.py
+ │   │   └── watchdog_csv.py
+ │   ├── main_orchestrator.py  # Main entry point
+ │   └── test_phase1.py        # Integration test
+ ├── tests/
+ │   ├── test_api.py           # API Tests
+ │   ├── test_portfolio_accountant.py
+ │   └── test_risk_controller.py
+ ├── requirements.txt
+ └── README.md
+ ```
+ 
+ ---
+ 
+ ## License
+ 
+ This project is for personal use. Not financial advice. Use at your own risk.
 
 ---
 
