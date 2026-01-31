@@ -359,3 +359,49 @@ class PortfolioAccountant:
             return []
         # Filter out invalid symbols (numeric IDs like CUSIP)
         return [h['symbol'] for h in snapshot['holdings'] if not h['symbol'].isdigit()]
+    
+    def get_portfolio_summary(self) -> Dict:
+        """Get latest portfolio snapshot summary."""
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT total_equity, cash_balance, import_timestamp
+                FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 1
+            """)
+            
+            row = cursor.fetchone()
+            if not row:
+                return {"equity": 0, "cash": 0, "last_updated": None}
+                
+            return {
+                "equity": row[0],
+                "cash": row[1],
+                "last_updated": row[2]
+            }
+            
+    def get_current_holdings(self) -> List[Dict]:
+        """Get current holdings."""
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT h.symbol, h.quantity, h.cost_basis, h.current_value
+                FROM holdings h
+                JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+                WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
+                ORDER BY h.current_value DESC
+            """)
+            
+            return [
+                {
+                    "symbol": row[0],
+                    "quantity": row[1],
+                    "cost_basis": row[2],
+                    "current_value": row[3],
+                    "unrealized_pl": row[3] - (row[1] * row[2]) if row[1] > 0 else 0
+                }
+                for row in cursor.fetchall()
+            ]

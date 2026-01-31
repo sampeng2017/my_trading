@@ -8,6 +8,7 @@ Automated Stock Trading Intelligence System - a locally-run, multi-agent AI-powe
 
 **Platform**: macOS 12+ (requires AppleScript for iMessage)
 **Language**: Python 3.10+
+**Database**: SQLite (local) or Turso (cloud) - configurable via `DB_MODE`
 
 ## Common Commands
 
@@ -45,6 +46,8 @@ python scripts/test_market_data.py   # Test price fetching
 python scripts/test_screener.py      # Test stock screener + LLM ranking
 python scripts/check_database.py     # View database status
 python scripts/run_system.py         # Run trading system
+python scripts/test_phase1_db.py     # Test database connection (local/Turso)
+python scripts/migrate_to_turso.py   # Migrate local DB to Turso cloud
 ```
 
 ## Architecture
@@ -78,20 +81,26 @@ The system uses a 7-agent architecture with clear separation between determinist
 
 - **Deterministic Safety + Probabilistic Reasoning**: AI agents provide market interpretation; RiskController enforces mathematical constraints with no AI involvement
 - **Fallback Design**: Alpaca bars → yfinance → Alpaca quotes for prices; system gracefully degrades without API keys
-- **Local-First**: All data stays local in SQLite; no cloud storage
+- **Flexible Storage**: Supports local SQLite (default) or Turso cloud database for cross-device access
 
 ## Environment Setup
 
-Create `.env` file in project root with API keys:
+Create `.env` file in project root (python-dotenv format, no `export`):
 ```bash
-export GEMINI_API_KEY="your-key"         # Required for AI
-export ALPACA_API_KEY="your-key"         # Optional (falls back to yfinance)
-export ALPACA_SECRET_KEY="your-key"
-export FINNHUB_API_KEY="your-key"        # Optional (for news)
-export ALPHA_VANTAGE_API_KEY="your-key"  # Optional (backup for screener)
+# API Keys
+GEMINI_API_KEY=your-key              # Required for AI
+ALPACA_API_KEY=your-key              # Optional (falls back to yfinance)
+ALPACA_SECRET_KEY=your-key
+FINNHUB_API_KEY=your-key             # Optional (for news)
+ALPHA_VANTAGE_API_KEY=your-key       # Optional (backup for screener)
+
+# Database Mode (optional - defaults to local)
+DB_MODE=local                        # 'local' for SQLite, 'turso' for cloud
+TURSO_DATABASE_URL=libsql://...      # Required if DB_MODE=turso
+TURSO_AUTH_TOKEN=your-token          # Required if DB_MODE=turso
 ```
 
-Load before running: `source .env`
+The `.env` file is loaded automatically by python-dotenv.
 
 ## Configuration
 
@@ -112,7 +121,13 @@ Key settings:
 
 ## Database
 
-**`data/init_schema.sql`** - SQLite schema with 10 tables:
+**`src/data/db_connection.py`** - Database connection adapter supporting:
+- **Local mode** (`DB_MODE=local`): Uses `data/agent.db` SQLite file
+- **Cloud mode** (`DB_MODE=turso`): Uses Turso cloud SQLite
+
+All agents use `get_connection()` context manager for database access.
+
+**`data/init_schema.sql`** - Schema with 12 tables:
 - `portfolio_snapshot` / `holdings`: Portfolio state
 - `market_data`: Price cache with TTL
 - `news_analysis`: Sentiment results
