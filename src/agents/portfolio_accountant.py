@@ -9,11 +9,12 @@ Handles:
 """
 
 import pandas as pd
-import sqlite3
+
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import logging
+from src.data.db_connection import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -39,16 +40,16 @@ class PortfolioAccountant:
         db_dir = Path(self.db_path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
         
+        
         # Check if tables exist
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='portfolio_snapshot'
-        """)
-        if not cursor.fetchone():
-            logger.warning("Database tables not found. Run init_schema.sql first.")
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='portfolio_snapshot'
+            """)
+            if not cursor.fetchone():
+                logger.warning("Database tables not found. Run init_schema.sql first.")
     
     def import_fidelity_csv(self, csv_path: str) -> int:
         """
@@ -176,117 +177,109 @@ class PortfolioAccountant:
     
     def _create_snapshot(self) -> int:
         """Create new snapshot entry and return its ID."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO portfolio_snapshot (import_timestamp, total_equity, cash_balance)
-            VALUES (?, 0, 0)
-        """, (datetime.now().isoformat(),))
-        
-        snapshot_id = cursor.lastrowid
-        
-        conn.commit()
-        conn.close()
-        
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO portfolio_snapshot (import_timestamp, total_equity, cash_balance)
+                VALUES (?, 0, 0)
+            """, (datetime.now().isoformat(),))
+            
+            snapshot_id = cursor.lastrowid
+            conn.commit()
+            
         return snapshot_id
     
     def _add_holding(self, snapshot_id: int, symbol: str, quantity: float,
                      cost_basis: float, current_value: float):
         """Add holding to snapshot."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO holdings (snapshot_id, symbol, quantity, cost_basis, current_value)
-            VALUES (?, ?, ?, ?, ?)
-        """, (snapshot_id, symbol, quantity, cost_basis, current_value))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO holdings (snapshot_id, symbol, quantity, cost_basis, current_value)
+                VALUES (?, ?, ?, ?, ?)
+            """, (snapshot_id, symbol, quantity, cost_basis, current_value))
+            
+            conn.commit()
     
     def _update_cash(self, snapshot_id: int, cash_balance: float):
         """Update cash balance for snapshot."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            UPDATE portfolio_snapshot
-            SET cash_balance = ?
-            WHERE id = ?
-        """, (cash_balance, snapshot_id))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE portfolio_snapshot
+                SET cash_balance = ?
+                WHERE id = ?
+            """, (cash_balance, snapshot_id))
+            
+            conn.commit()
     
     def _finalize_snapshot(self, snapshot_id: int):
         """Calculate total equity for snapshot."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT COALESCE(SUM(current_value), 0)
-            FROM holdings 
-            WHERE snapshot_id = ?
-        """, (snapshot_id,))
-        
-        holdings_value = cursor.fetchone()[0]
-        
-        cursor.execute("""
-            SELECT cash_balance 
-            FROM portfolio_snapshot 
-            WHERE id = ?
-        """, (snapshot_id,))
-        
-        cash = cursor.fetchone()[0] or 0
-        total_equity = holdings_value + cash
-        
-        cursor.execute("""
-            UPDATE portfolio_snapshot
-            SET total_equity = ?
-            WHERE id = ?
-        """, (total_equity, snapshot_id))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT COALESCE(SUM(current_value), 0)
+                FROM holdings 
+                WHERE snapshot_id = ?
+            """, (snapshot_id,))
+            
+            holdings_value = cursor.fetchone()[0]
+            
+            cursor.execute("""
+                SELECT cash_balance 
+                FROM portfolio_snapshot 
+                WHERE id = ?
+            """, (snapshot_id,))
+            
+            cash = cursor.fetchone()[0] or 0
+            total_equity = holdings_value + cash
+            
+            cursor.execute("""
+                UPDATE portfolio_snapshot
+                SET total_equity = ?
+                WHERE id = ?
+            """, (total_equity, snapshot_id))
+            
+            conn.commit()
     
     def _reconcile_with_previous(self):
         """Compare new snapshot with previous to detect trades."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get last 2 snapshots
-        cursor.execute("""
-            SELECT id FROM portfolio_snapshot
-            ORDER BY import_timestamp DESC
-            LIMIT 2
-        """)
-        
-        snapshots = cursor.fetchall()
-        
-        if len(snapshots) < 2:
-            logger.info("No previous snapshot to compare.")
-            conn.close()
-            return
-        
-        new_id, old_id = snapshots[0][0], snapshots[1][0]
-        
-        # Get holdings for both
-        cursor.execute("""
-            SELECT symbol, quantity, cost_basis
-            FROM holdings
-            WHERE snapshot_id = ?
-        """, (old_id,))
-        old_holdings = {row[0]: {'qty': row[1], 'basis': row[2]} for row in cursor.fetchall()}
-        
-        cursor.execute("""
-            SELECT symbol, quantity, cost_basis
-            FROM holdings
-            WHERE snapshot_id = ?
-        """, (new_id,))
-        new_holdings = {row[0]: {'qty': row[1], 'basis': row[2]} for row in cursor.fetchall()}
-        
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get last 2 snapshots
+            cursor.execute("""
+                SELECT id FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 2
+            """)
+            
+            snapshots = cursor.fetchall()
+            
+            if len(snapshots) < 2:
+                logger.info("No previous snapshot to compare.")
+                return
+            
+            new_id, old_id = snapshots[0][0], snapshots[1][0]
+            
+            # Get holdings for both
+            cursor.execute("""
+                SELECT symbol, quantity, cost_basis
+                FROM holdings
+                WHERE snapshot_id = ?
+            """, (old_id,))
+            old_holdings = {row[0]: {'qty': row[1], 'basis': row[2]} for row in cursor.fetchall()}
+            
+            cursor.execute("""
+                SELECT symbol, quantity, cost_basis
+                FROM holdings
+                WHERE snapshot_id = ?
+            """, (new_id,))
+            new_holdings = {row[0]: {'qty': row[1], 'basis': row[2]} for row in cursor.fetchall()}
         
         # Detect changes
         all_symbols = set(old_holdings.keys()) | set(new_holdings.keys())
@@ -306,55 +299,51 @@ class PortfolioAccountant:
     
     def _log_inferred_trade(self, symbol: str, action: str, quantity: float, snapshot_id: int):
         """Log inferred trade to audit trail."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO trade_log (symbol, action, quantity, snapshot_id, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """, (symbol, action, quantity, snapshot_id, datetime.now().isoformat()))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO trade_log (symbol, action, quantity, snapshot_id, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (symbol, action, quantity, snapshot_id, datetime.now().isoformat()))
+            
+            conn.commit()
     
     def get_latest_snapshot(self) -> Optional[Dict]:
         """Get the most recent portfolio snapshot."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT id, import_timestamp, total_equity, cash_balance
-            FROM portfolio_snapshot
-            ORDER BY import_timestamp DESC
-            LIMIT 1
-        """)
-        
-        row = cursor.fetchone()
-        if not row:
-            conn.close()
-            return None
-        
-        snapshot_id, timestamp, equity, cash = row
-        
-        # Get holdings
-        cursor.execute("""
-            SELECT symbol, quantity, cost_basis, current_value
-            FROM holdings
-            WHERE snapshot_id = ?
-        """, (snapshot_id,))
-        
-        holdings = [
-            {
-                'symbol': r[0],
-                'quantity': r[1],
-                'cost_basis': r[2],
-                'current_value': r[3]
-            }
-            for r in cursor.fetchall()
-        ]
-        
-        conn.close()
-        
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, import_timestamp, total_equity, cash_balance
+                FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 1
+            """)
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            snapshot_id, timestamp, equity, cash = row
+            
+            # Get holdings
+            cursor.execute("""
+                SELECT symbol, quantity, cost_basis, current_value
+                FROM holdings
+                WHERE snapshot_id = ?
+            """, (snapshot_id,))
+            
+            holdings = [
+                {
+                    'symbol': r[0],
+                    'quantity': r[1],
+                    'cost_basis': r[2],
+                    'current_value': r[3]
+                }
+                for r in cursor.fetchall()
+            ]
+            
         return {
             'id': snapshot_id,
             'timestamp': timestamp,

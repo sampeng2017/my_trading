@@ -12,6 +12,7 @@ Screening Criteria:
 """
 
 import sqlite3
+from src.data.db_connection import get_connection
 import requests
 import logging
 import math
@@ -192,26 +193,24 @@ class StockScreener:
         """Check if fresh screening results exist in cache."""
         ttl = ttl_override or self.cache_ttl
 
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                SELECT symbol FROM screener_results
-                WHERE screening_timestamp > datetime('now', ?)
-                ORDER BY rank ASC
-            """, (f'-{ttl} seconds',))
+            try:
+                cursor.execute("""
+                    SELECT symbol FROM screener_results
+                    WHERE screening_timestamp > datetime('now', ?)
+                    ORDER BY rank ASC
+                """, (f'-{ttl} seconds',))
 
-            results = cursor.fetchall()
-            if results:
-                return [row[0] for row in results]
-            return None
+                results = cursor.fetchall()
+                if results:
+                    return [row[0] for row in results]
+                return None
 
-        except sqlite3.OperationalError:
-            # Table doesn't exist yet
-            return None
-        finally:
-            conn.close()
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet
+                return None
 
     def _fetch_alpaca_movers(self) -> List[Dict]:
         """
@@ -654,89 +653,83 @@ Respond ONLY with valid JSON, no markdown formatting."""
 
     def _cache_screening_results(self, symbols: List[str], source: str):
         """Store screening results in database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        try:
-            # Clear old results
-            cursor.execute("DELETE FROM screener_results")
+            try:
+                # Clear old results
+                cursor.execute("DELETE FROM screener_results")
 
-            # Insert new results
-            for rank, symbol in enumerate(symbols, 1):
-                cursor.execute("""
-                    INSERT INTO screener_results (symbol, source, rank, screening_timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                """, (symbol, source, rank))
+                # Insert new results
+                for rank, symbol in enumerate(symbols, 1):
+                    cursor.execute("""
+                        INSERT INTO screener_results (symbol, source, rank, screening_timestamp)
+                        VALUES (?, ?, ?, datetime('now'))
+                    """, (symbol, source, rank))
 
-            conn.commit()
-            logger.info(f"Cached {len(symbols)} screening results from {source}")
+                conn.commit()
+                logger.info(f"Cached {len(symbols)} screening results from {source}")
 
-        except sqlite3.OperationalError as e:
-            logger.warning(f"Could not cache results (table may not exist): {e}")
-        finally:
-            conn.close()
+            except sqlite3.OperationalError as e:
+                logger.warning(f"Could not cache results (table may not exist): {e}")
 
     def _log_screener_run(self, source: str, found: int, filtered: int, error: Optional[str]):
         """Log screener run for auditing."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                INSERT INTO screener_runs
-                (run_timestamp, source, symbols_found, symbols_after_filter, error)
-                VALUES (datetime('now'), ?, ?, ?, ?)
-            """, (source, found, filtered, error))
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Table doesn't exist yet
-        finally:
-            conn.close()
+            try:
+                cursor.execute("""
+                    INSERT INTO screener_runs
+                    (run_timestamp, source, symbols_found, symbols_after_filter, error)
+                    VALUES (datetime('now'), ?, ?, ?, ?)
+                """, (source, found, filtered, error))
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass  # Table doesn't exist yet
 
     def get_screening_stats(self) -> Dict:
         """Get statistics about recent screenings."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
 
-        stats = {
-            'last_run': None,
-            'total_runs_today': 0,
-            'avg_symbols_found': 0,
-            'sources_used': []
-        }
+            stats = {
+                'last_run': None,
+                'total_runs_today': 0,
+                'avg_symbols_found': 0,
+                'sources_used': []
+            }
 
-        try:
-            # Last run
-            cursor.execute("""
-                SELECT run_timestamp, source, symbols_found, symbols_after_filter
-                FROM screener_runs
-                ORDER BY run_timestamp DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-            if row:
-                stats['last_run'] = {
-                    'timestamp': row[0],
-                    'source': row[1],
-                    'found': row[2],
-                    'filtered': row[3]
-                }
+            try:
+                # Last run
+                cursor.execute("""
+                    SELECT run_timestamp, source, symbols_found, symbols_after_filter
+                    FROM screener_runs
+                    ORDER BY run_timestamp DESC
+                    LIMIT 1
+                """)
+                row = cursor.fetchone()
+                if row:
+                    stats['last_run'] = {
+                        'timestamp': row[0],
+                        'source': row[1],
+                        'found': row[2],
+                        'filtered': row[3]
+                    }
 
-            # Today's stats
-            cursor.execute("""
-                SELECT COUNT(*), AVG(symbols_found), GROUP_CONCAT(DISTINCT source)
-                FROM screener_runs
-                WHERE DATE(run_timestamp) = DATE('now')
-            """)
-            row = cursor.fetchone()
-            if row:
-                stats['total_runs_today'] = row[0] or 0
-                stats['avg_symbols_found'] = round(row[1] or 0, 1)
-                stats['sources_used'] = (row[2] or '').split(',')
+                # Today's stats
+                cursor.execute("""
+                    SELECT COUNT(*), AVG(symbols_found), GROUP_CONCAT(DISTINCT source)
+                    FROM screener_runs
+                    WHERE DATE(run_timestamp) = DATE('now')
+                """)
+                row = cursor.fetchone()
+                if row:
+                    stats['total_runs_today'] = row[0] or 0
+                    stats['avg_symbols_found'] = round(row[1] or 0, 1)
+                    stats['sources_used'] = (row[2] or '').split(',')
 
-        except sqlite3.OperationalError:
-            pass
-        finally:
-            conn.close()
+            except sqlite3.OperationalError:
+                pass
 
         return stats

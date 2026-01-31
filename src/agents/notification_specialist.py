@@ -14,9 +14,9 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, time
-import sqlite3
 from typing import Dict, List, Optional, Any
 import logging
+from src.data.db_connection import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -307,17 +307,16 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
     
     def _log_notification(self, channel: str, content: str, status: str):
         """Log all notifications for debugging."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO notification_log
-            (channel, content, status, timestamp)
-            VALUES (?, ?, ?, datetime('now'))
-        """, (channel, content[:self.config.get('limits', {}).get('notification_truncation', 500)], status))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO notification_log
+                (channel, content, status, timestamp)
+                VALUES (?, ?, ?, datetime('now'))
+            """, (channel, content[:self.config.get('limits', {}).get('notification_truncation', 500)], status))
+            
+            conn.commit()
     
     def send_daily_summary(self):
         """Send end-of-day performance report via email."""
@@ -336,49 +335,47 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
     
     def _generate_daily_summary(self) -> Dict:
         """Query database for daily performance metrics."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get today's recommendations (latest per symbol to avoid duplicates)
-        cursor.execute("""
-            SELECT symbol, action, confidence, reasoning
-            FROM strategy_recommendations r
-            WHERE DATE(timestamp) = DATE('now')
-            AND r.id = (
-                SELECT id FROM strategy_recommendations r2 
-                WHERE r2.symbol = r.symbol 
-                AND DATE(r2.timestamp) = DATE('now')
-                ORDER BY r2.timestamp DESC 
-                LIMIT 1
-            )
-            ORDER BY timestamp DESC
-        """)
-        recommendations = cursor.fetchall()
-        
-        # Get portfolio value change
-        cursor.execute("""
-            SELECT total_equity, cash_balance
-            FROM portfolio_snapshot
-            ORDER BY import_timestamp DESC
-            LIMIT 2
-        """)
-        equity_rows = cursor.fetchall()
-        
-        current_equity = equity_rows[0][0] if equity_rows else 10000
-        previous_equity = equity_rows[1][0] if len(equity_rows) > 1 else current_equity
-        daily_change = current_equity - previous_equity
-        daily_change_pct = (daily_change / previous_equity) * 100 if previous_equity else 0
-        
-        # Get current holdings
-        cursor.execute("""
-            SELECT h.symbol, h.quantity, h.current_value
-            FROM holdings h
-            JOIN portfolio_snapshot p ON h.snapshot_id = p.id
-            WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
-        """)
-        holdings = cursor.fetchall()
-        
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get today's recommendations (latest per symbol to avoid duplicates)
+            cursor.execute("""
+                SELECT symbol, action, confidence, reasoning
+                FROM strategy_recommendations r
+                WHERE DATE(timestamp) = DATE('now')
+                AND r.id = (
+                    SELECT id FROM strategy_recommendations r2 
+                    WHERE r2.symbol = r.symbol 
+                    AND DATE(r2.timestamp) = DATE('now')
+                    ORDER BY r2.timestamp DESC 
+                    LIMIT 1
+                )
+                ORDER BY timestamp DESC
+            """)
+            recommendations = cursor.fetchall()
+            
+            # Get portfolio value change
+            cursor.execute("""
+                SELECT total_equity, cash_balance
+                FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 2
+            """)
+            equity_rows = cursor.fetchall()
+            
+            current_equity = equity_rows[0][0] if equity_rows else 10000
+            previous_equity = equity_rows[1][0] if len(equity_rows) > 1 else current_equity
+            daily_change = current_equity - previous_equity
+            daily_change_pct = (daily_change / previous_equity) * 100 if previous_equity else 0
+            
+            # Get current holdings
+            cursor.execute("""
+                SELECT h.symbol, h.quantity, h.current_value
+                FROM holdings h
+                JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+                WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
+            """)
+            holdings = cursor.fetchall()
         
         return {
             'recommendations': recommendations,
@@ -491,18 +488,17 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
     
     def get_notification_history(self, limit: int = 20) -> List[Dict]:
         """Get recent notification history."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT channel, content, status, timestamp
-            FROM notification_log
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """, (limit,))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT channel, content, status, timestamp
+                FROM notification_log
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (limit,))
+            
+            rows = cursor.fetchall()
         
         return [
             {

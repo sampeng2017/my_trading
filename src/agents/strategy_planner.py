@@ -8,7 +8,8 @@ Handles:
 - Confidence scoring for recommendations
 """
 
-import sqlite3
+
+from src.data.db_connection import get_connection
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -141,19 +142,19 @@ class StrategyPlanner:
             List of recommendation dicts for held positions
         """
         # Get current holdings from database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT h.symbol, h.quantity, h.current_value
-            FROM holdings h
-            JOIN portfolio_snapshot p ON h.snapshot_id = p.id
-            WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
-            AND h.quantity > 0
-        """)
-        
-        holdings = cursor.fetchall()
-        conn.close()
+
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT h.symbol, h.quantity, h.current_value
+                FROM holdings h
+                JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+                WHERE p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
+                AND h.quantity > 0
+            """)
+            
+            holdings = cursor.fetchall()
         
         if not holdings:
             logger.info("No holdings to review")
@@ -177,53 +178,51 @@ class StrategyPlanner:
     
     def _gather_context(self, symbol: str) -> Dict:
         """Pull all relevant data from database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get latest price data
-        cursor.execute("""
-            SELECT price, atr, sma_50, is_volatile 
-            FROM market_data 
-            WHERE symbol = ? 
-            ORDER BY timestamp DESC 
-            LIMIT 1
-        """, (symbol.upper(),))
-        market_data = cursor.fetchone()
-        
-        # Get recent news sentiment (only from last 72 hours)
-        # Use datetime() to parse ISO timestamps (which have 'T' separator)
-        news_recency_hours = 72
-        cursor.execute("""
-            SELECT sentiment, confidence, implied_action, key_reason
-            FROM news_analysis
-            WHERE symbol = ?
-            AND datetime(timestamp) > datetime('now', ?)
-            ORDER BY timestamp DESC
-            LIMIT 5
-        """, (symbol.upper(), f'-{news_recency_hours} hours'))
-        news_items = cursor.fetchall()
-        
-        # Get current portfolio position (if any)
-        cursor.execute("""
-            SELECT h.quantity, h.cost_basis, h.current_value
-            FROM holdings h
-            JOIN portfolio_snapshot p ON h.snapshot_id = p.id
-            WHERE h.symbol = ?
-            ORDER BY p.import_timestamp DESC
-            LIMIT 1
-        """, (symbol.upper(),))
-        position = cursor.fetchone()
-        
-        # Get total portfolio equity
-        cursor.execute("""
-            SELECT total_equity, cash_balance
-            FROM portfolio_snapshot
-            ORDER BY import_timestamp DESC
-            LIMIT 1
-        """)
-        portfolio = cursor.fetchone()
-        
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get latest price data
+            cursor.execute("""
+                SELECT price, atr, sma_50, is_volatile 
+                FROM market_data 
+                WHERE symbol = ? 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            """, (symbol.upper(),))
+            market_data = cursor.fetchone()
+            
+            # Get recent news sentiment (only from last 72 hours)
+            # Use datetime() to parse ISO timestamps (which have 'T' separator)
+            news_recency_hours = 72
+            cursor.execute("""
+                SELECT sentiment, confidence, implied_action, key_reason
+                FROM news_analysis
+                WHERE symbol = ?
+                AND datetime(timestamp) > datetime('now', ?)
+                ORDER BY timestamp DESC
+                LIMIT 5
+            """, (symbol.upper(), f'-{news_recency_hours} hours'))
+            news_items = cursor.fetchall()
+            
+            # Get current portfolio position (if any)
+            cursor.execute("""
+                SELECT h.quantity, h.cost_basis, h.current_value
+                FROM holdings h
+                JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+                WHERE h.symbol = ?
+                ORDER BY p.import_timestamp DESC
+                LIMIT 1
+            """, (symbol.upper(),))
+            position = cursor.fetchone()
+            
+            # Get total portfolio equity
+            cursor.execute("""
+                SELECT total_equity, cash_balance
+                FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 1
+            """)
+            portfolio = cursor.fetchone()
         
         return {
             'price': market_data[0] if market_data else None,
@@ -435,52 +434,50 @@ Based on the above, what action do you recommend?
     
     def _write_to_db(self, recommendation: Dict):
         """Store recommendation for audit trail."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO strategy_recommendations
-            (symbol, action, confidence, reasoning, target_price, stop_loss, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            recommendation['symbol'],
-            recommendation['action'],
-            recommendation['confidence'],
-            recommendation.get('reasoning'),
-            recommendation.get('target_price'),
-            recommendation.get('stop_loss'),
-            recommendation['timestamp']
-        ))
-        
-        conn.commit()
-        conn.close()
-        
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO strategy_recommendations
+                (symbol, action, confidence, reasoning, target_price, stop_loss, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                recommendation['symbol'],
+                recommendation['action'],
+                recommendation['confidence'],
+                recommendation.get('reasoning'),
+                recommendation.get('target_price'),
+                recommendation.get('stop_loss'),
+                recommendation['timestamp']
+            ))
+            
+            conn.commit()
+            
         logger.debug(f"Wrote recommendation for {recommendation['symbol']} to database")
     
     def get_recent_recommendations(self, symbol: Optional[str] = None, 
                                     limit: int = 10) -> List[Dict]:
         """Get recent recommendations from database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if symbol:
-            cursor.execute("""
-                SELECT symbol, action, confidence, reasoning, target_price, stop_loss, timestamp
-                FROM strategy_recommendations
-                WHERE symbol = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (symbol.upper(), limit))
-        else:
-            cursor.execute("""
-                SELECT symbol, action, confidence, reasoning, target_price, stop_loss, timestamp
-                FROM strategy_recommendations
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """, (limit,))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            if symbol:
+                cursor.execute("""
+                    SELECT symbol, action, confidence, reasoning, target_price, stop_loss, timestamp
+                    FROM strategy_recommendations
+                    WHERE symbol = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """, (symbol.upper(), limit))
+            else:
+                cursor.execute("""
+                    SELECT symbol, action, confidence, reasoning, target_price, stop_loss, timestamp
+                    FROM strategy_recommendations
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """, (limit,))
+            
+            rows = cursor.fetchall()
         
         return [
             {

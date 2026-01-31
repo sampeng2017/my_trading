@@ -12,8 +12,9 @@ Handles:
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-import sqlite3
+
 import logging
+from src.data.db_connection import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -299,25 +300,24 @@ class MarketAnalyst:
     
     def _write_to_db(self, symbol: str, metrics: Dict):
         """Persist market data to shared database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile, timestamp, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            symbol.upper(),
-            metrics['price'],
-            metrics.get('atr'),
-            metrics.get('sma_50'),
-            metrics.get('avg_volume'),
-            1 if metrics.get('is_volatile') else 0,
-            metrics['timestamp'],
-            metrics.get('source', 'Unknown')
-        ))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO market_data (symbol, price, atr, sma_50, volume, is_volatile, timestamp, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                symbol.upper(),
+                metrics['price'],
+                metrics.get('atr'),
+                metrics.get('sma_50'),
+                metrics.get('avg_volume'),
+                1 if metrics.get('is_volatile') else 0,
+                metrics['timestamp'],
+                metrics.get('source', 'Unknown')
+            ))
+            
+            conn.commit()
         
         logger.debug(f"Wrote market data for {symbol} to database")
     
@@ -327,19 +327,18 @@ class MarketAnalyst:
         
         Falls back to live fetch if no cache exists.
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT price, timestamp
-            FROM market_data
-            WHERE symbol = ?
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """, (symbol.upper(),))
-        
-        row = cursor.fetchone()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT price, timestamp
+                FROM market_data
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (symbol.upper(),))
+            
+            row = cursor.fetchone()
         
         if row:
             price, timestamp = row
@@ -404,37 +403,36 @@ class MarketAnalyst:
             logger.warning("yfinance not available for metadata population")
             return
             
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        count = 0
-        for symbol in symbols:
-            try:
-                # Check if already exists and recent
-                cursor.execute("SELECT last_updated FROM stock_metadata WHERE symbol = ?", (symbol,))
-                row = cursor.fetchone()
-                if row:
-                    continue  # Skip existing
-                
-                ticker = yf.Ticker(symbol)
-                info = ticker.info
-                
-                sector = info.get('sector', 'Unknown')
-                industry = info.get('industry', 'Unknown')
-                name = info.get('longName', symbol)
-                avg_vol = info.get('averageVolume', 0)
-                
-                cursor.execute("""
-                    INSERT OR REPLACE INTO stock_metadata 
-                    (symbol, name, sector, industry, avg_volume_20d, last_updated)
-                    VALUES (?, ?, ?, ?, ?, datetime('now'))
-                """, (symbol, name, sector, industry, avg_vol))
-                
-                count += 1
-                
-            except Exception as e:
-                logger.error(f"Error fetching metadata for {symbol}: {e}")
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            count = 0
+            for symbol in symbols:
+                try:
+                    # Check if already exists and recent
+                    cursor.execute("SELECT last_updated FROM stock_metadata WHERE symbol = ?", (symbol,))
+                    row = cursor.fetchone()
+                    if row:
+                        continue  # Skip existing
+                    
+                    ticker = yf.Ticker(symbol)
+                    info = ticker.info
+                    
+                    sector = info.get('sector', 'Unknown')
+                    industry = info.get('industry', 'Unknown')
+                    name = info.get('longName', symbol)
+                    avg_vol = info.get('averageVolume', 0)
+                    
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO stock_metadata 
+                        (symbol, name, sector, industry, avg_volume_20d, last_updated)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                    """, (symbol, name, sector, industry, avg_vol))
+                    
+                    count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error fetching metadata for {symbol}: {e}")
+            
+            conn.commit()
         logger.info(f"Populated metadata for {count} new symbols")

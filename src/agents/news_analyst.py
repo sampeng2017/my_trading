@@ -11,7 +11,8 @@ Handles:
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-import sqlite3
+
+from src.data.db_connection import get_connection
 import json
 import logging
 import time
@@ -248,26 +249,25 @@ Output ONLY the JSON, no other text."""
     
     def _write_to_db(self, analysis: Dict):
         """Store news analysis in database."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO news_analysis 
-            (symbol, headline, sentiment, confidence, implied_action, key_reason, urgency, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            analysis.get('symbol'),
-            analysis.get('headline'),
-            analysis.get('sentiment'),
-            analysis.get('confidence'),
-            analysis.get('implied_action'),
-            analysis.get('key_reason'),
-            analysis.get('urgency'),
-            analysis.get('timestamp')
-        ))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO news_analysis 
+                (symbol, headline, sentiment, confidence, implied_action, key_reason, urgency, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                analysis.get('symbol'),
+                analysis.get('headline'),
+                analysis.get('sentiment'),
+                analysis.get('confidence'),
+                analysis.get('implied_action'),
+                analysis.get('key_reason'),
+                analysis.get('urgency'),
+                analysis.get('timestamp')
+            ))
+            
+            conn.commit()
         
         logger.debug(f"Wrote news analysis for {analysis.get('symbol')} to database")
     
@@ -287,19 +287,18 @@ Output ONLY the JSON, no other text."""
         Returns:
             List of recent sentiment analyses
         """
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT sentiment, confidence, implied_action, key_reason, urgency, timestamp
-            FROM news_analysis
-            WHERE symbol = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """, (symbol.upper(), limit))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT sentiment, confidence, implied_action, key_reason, urgency, timestamp
+                FROM news_analysis
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (symbol.upper(), limit))
+            
+            rows = cursor.fetchall()
         
         return [
             {
@@ -315,20 +314,19 @@ Output ONLY the JSON, no other text."""
     
     def get_high_urgency_news(self, hours: int = 4) -> List[Dict]:
         """Get all high-urgency news in recent period."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
-        
-        cursor.execute("""
-            SELECT symbol, headline, sentiment, confidence, implied_action, key_reason, timestamp
-            FROM news_analysis
-            WHERE urgency = 'high' AND timestamp > ?
-            ORDER BY timestamp DESC
-        """, (cutoff,))
-        
-        rows = cursor.fetchall()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+            
+            cursor.execute("""
+                SELECT symbol, headline, sentiment, confidence, implied_action, key_reason, timestamp
+                FROM news_analysis
+                WHERE urgency = 'high' AND timestamp > ?
+                ORDER BY timestamp DESC
+            """, (cutoff,))
+            
+            rows = cursor.fetchall()
         
         return [
             {

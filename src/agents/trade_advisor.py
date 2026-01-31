@@ -6,7 +6,8 @@ Gathers context from portfolio, news, market data, and past recommendations
 to provide informed suggestions with confidence levels.
 """
 
-import sqlite3
+
+from src.data.db_connection import get_connection
 import json
 import re
 from datetime import datetime, timedelta
@@ -179,8 +180,7 @@ class TradeAdvisor:
             'portfolio_summary': None
         }
         
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
             # Get current position
@@ -271,8 +271,7 @@ class TradeAdvisor:
                     'total_equity': portfolio[0],
                     'cash_balance': portfolio[1]
                 }
-        finally:
-            conn.close()
+
         
         return context
     
@@ -285,8 +284,7 @@ class TradeAdvisor:
             'recommendations': []
         }
         
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
             # Get portfolio summary
@@ -340,8 +338,7 @@ class TradeAdvisor:
                 }
                 for r in recs
             ]
-        finally:
-            conn.close()
+
         
         return context
     

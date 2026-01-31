@@ -13,7 +13,8 @@ Hard Constraints:
 5. Volatility Filter: Reject if ATR > 10% of price
 """
 
-import sqlite3
+
+from src.data.db_connection import get_connection
 from datetime import datetime
 from typing import Dict, Optional, Any
 import logging
@@ -248,61 +249,61 @@ class RiskController:
     
     def _get_risk_context(self, symbol: str) -> Dict:
         """Fetch all data needed for risk calculations."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get market data (price, atr, volume)
-        cursor.execute("""
-            SELECT price, atr, volume
-            FROM market_data
-            WHERE symbol = ?
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """, (symbol.upper(),))
-        market = cursor.fetchone()
-        
-        # Get portfolio state
-        cursor.execute("""
-            SELECT total_equity, cash_balance
-            FROM portfolio_snapshot
-            ORDER BY import_timestamp DESC
-            LIMIT 1
-        """)
-        portfolio = cursor.fetchone()
-        
-        # Get current position
-        cursor.execute("""
-            SELECT h.quantity, h.current_value
-            FROM holdings h
-            JOIN portfolio_snapshot p ON h.snapshot_id = p.id
-            WHERE h.symbol = ?
-            ORDER BY p.import_timestamp DESC
-            LIMIT 1
-        """, (symbol.upper(),))
-        position = cursor.fetchone()
-        
-        # Get sector from metadata
-        cursor.execute("""
-            SELECT sector FROM stock_metadata WHERE symbol = ?
-        """, (symbol.upper(),))
-        sector_row = cursor.fetchone()
-        sector = sector_row[0] if sector_row else 'Unknown'
-        
-        # Get sector exposure (sum of all holdings in same sector)
-        sector_exposure = 0
-        if sector != 'Unknown':
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get market data (price, atr, volume)
             cursor.execute("""
-                SELECT SUM(h.current_value)
+                SELECT price, atr, volume
+                FROM market_data
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (symbol.upper(),))
+            market = cursor.fetchone()
+            
+            # Get portfolio state
+            cursor.execute("""
+                SELECT total_equity, cash_balance
+                FROM portfolio_snapshot
+                ORDER BY import_timestamp DESC
+                LIMIT 1
+            """)
+            portfolio = cursor.fetchone()
+            
+            # Get current position
+            cursor.execute("""
+                SELECT h.quantity, h.current_value
                 FROM holdings h
                 JOIN portfolio_snapshot p ON h.snapshot_id = p.id
-                JOIN stock_metadata s ON h.symbol = s.symbol
-                WHERE s.sector = ?
-                AND p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
-            """, (sector,))
-            exp_row = cursor.fetchone()
-            sector_exposure = exp_row[0] if exp_row and exp_row[0] else 0
+                WHERE h.symbol = ?
+                ORDER BY p.import_timestamp DESC
+                LIMIT 1
+            """, (symbol.upper(),))
+            position = cursor.fetchone()
+            
+            # Get sector from metadata
+            cursor.execute("""
+                SELECT sector FROM stock_metadata WHERE symbol = ?
+            """, (symbol.upper(),))
+            sector_row = cursor.fetchone()
+            sector = sector_row[0] if sector_row else 'Unknown'
+            
+            # Get sector exposure (sum of all holdings in same sector)
+            sector_exposure = 0
+            if sector != 'Unknown':
+                cursor.execute("""
+                    SELECT SUM(h.current_value)
+                    FROM holdings h
+                    JOIN portfolio_snapshot p ON h.snapshot_id = p.id
+                    JOIN stock_metadata s ON h.symbol = s.symbol
+                    WHERE s.sector = ?
+                    AND p.id = (SELECT id FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 1)
+                """, (sector,))
+                exp_row = cursor.fetchone()
+                sector_exposure = exp_row[0] if exp_row and exp_row[0] else 0
         
-        conn.close()
+
         
         return {
             'price': market[0] if market else 0,
@@ -318,23 +319,22 @@ class RiskController:
     
     def _log_decision(self, recommendation: Dict, result: Dict):
         """Log all risk decisions for audit trail."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO risk_decisions
-            (symbol, action, approved, reason, approved_shares, timestamp)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-        """, (
-            recommendation.get('symbol'),
-            recommendation.get('action'),
-            1 if result['approved'] else 0,
-            result['reason'],
-            result.get('approved_shares')
-        ))
-        
-        conn.commit()
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO risk_decisions
+                (symbol, action, approved, reason, approved_shares, timestamp)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """, (
+                recommendation.get('symbol'),
+                recommendation.get('action'),
+                1 if result['approved'] else 0,
+                result['reason'],
+                result.get('approved_shares')
+            ))
+            
+            conn.commit()
         
         status = "✅ APPROVED" if result['approved'] else "❌ VETOED"
         logger.info(f"Risk decision for {recommendation.get('symbol')}: {status} - {result['reason']}")
@@ -401,33 +401,30 @@ class RiskController:
     
     def get_risk_summary(self) -> Dict:
         """Get current portfolio risk metrics."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get latest portfolio snapshot
-        cursor.execute("""
-            SELECT p.id, p.total_equity, p.cash_balance
-            FROM portfolio_snapshot p
-            ORDER BY p.import_timestamp DESC
-            LIMIT 1
-        """)
-        snapshot = cursor.fetchone()
-        
-        if not snapshot:
-            conn.close()
-            return {'error': 'No portfolio data'}
-        
-        snapshot_id, equity, cash = snapshot
-        
-        # Get holdings with values
-        cursor.execute("""
-            SELECT h.symbol, h.current_value
-            FROM holdings h
-            WHERE h.snapshot_id = ?
-        """, (snapshot_id,))
-        holdings = cursor.fetchall()
-        
-        conn.close()
+        with get_connection(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get latest portfolio snapshot
+            cursor.execute("""
+                SELECT p.id, p.total_equity, p.cash_balance
+                FROM portfolio_snapshot p
+                ORDER BY p.import_timestamp DESC
+                LIMIT 1
+            """)
+            snapshot = cursor.fetchone()
+            
+            if not snapshot:
+                return {'error': 'No portfolio data'}
+            
+            snapshot_id, equity, cash = snapshot
+            
+            # Get holdings with values
+            cursor.execute("""
+                SELECT h.symbol, h.current_value
+                FROM holdings h
+                WHERE h.snapshot_id = ?
+            """, (snapshot_id,))
+            holdings = cursor.fetchall()
         
         # Calculate metrics
         invested = equity - cash
