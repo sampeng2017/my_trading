@@ -28,7 +28,6 @@ Run commands yourself when you want:
 ```bash
 cd /Users/shengpeng/study/repo/my_trading
 source venv/bin/activate
-source .env
 
 python scripts/run_system.py premarket      # Pre-market scan
 python scripts/run_system.py market         # Get recommendations
@@ -43,7 +42,6 @@ python scripts/run_system.py postmarket     # Daily summary
 # Setup (run once)
 cd /Users/shengpeng/study/repo/my_trading
 source venv/bin/activate
-source .env
 
 # Main commands
 python scripts/import_portfolio.py          # Import latest portfolio
@@ -88,8 +86,9 @@ tail -f logs/stdout.log                     # Watch live logs
 ```bash
 cd /Users/shengpeng/study/repo/my_trading
 source venv/bin/activate
-source .env
 ```
+
+Note: `.env` is loaded automatically by python-dotenv.
 
 #### 1.3 Import Your Portfolio
 
@@ -233,15 +232,27 @@ This sends a daily summary email with:
 
 #### 3.2 Review the Day
 
+**Option A: Use REST API (recommended)**
 ```bash
-# View all recommendations
+# Start API server (if not running)
+uvicorn src.api.main:app --port 8000 &
+
+# Get recommendations
+curl -H "X-API-Key: dev-secret-key" "http://localhost:8000/agent/recommendations?limit=10"
+
+# Get portfolio
+curl -H "X-API-Key: dev-secret-key" http://localhost:8000/portfolio/summary
+```
+
+**Option B: Use Turso CLI (cloud database)**
+```bash
+turso db shell samtrading "SELECT symbol, action, confidence FROM strategy_recommendations ORDER BY timestamp DESC LIMIT 10;"
+```
+
+**Option C: Use sqlite3 (local database only)**
+```bash
+# Only works if DB_MODE=local
 sqlite3 data/agent.db "SELECT symbol, action, confidence, reasoning FROM strategy_recommendations WHERE date(timestamp) = date('now') ORDER BY timestamp DESC;"
-
-# View risk decisions
-sqlite3 data/agent.db "SELECT symbol, action, approved, reason FROM risk_decisions WHERE date(timestamp) = date('now');"
-
-# View screened stocks
-sqlite3 data/agent.db "SELECT symbol, source, rank FROM screener_results ORDER BY screening_timestamp DESC LIMIT 10;"
 ```
 
 ---
@@ -420,9 +431,20 @@ Now just save Fidelity CSVs to `inbox/` and they import automatically.
 | `scripts/import_portfolio.py` | Import Fidelity CSV |
 | `scripts/run_system.py` | Run trading system |
 | `scripts/check_database.py` | View results |
+| `scripts/test_phase1_db.py` | Test database connection |
 | `inbox/` | Drop CSV files here |
-| `data/agent.db` | SQLite database |
 | `logs/stdout.log` | System logs |
+
+### Database Access
+
+| Mode | How to Query |
+|------|--------------|
+| Cloud (Turso) | `turso db shell samtrading` |
+| Local (SQLite) | `sqlite3 data/agent.db` |
+| REST API | `curl http://localhost:8000/...` |
+
+Start API: `uvicorn src.api.main:app --port 8000`
+API Docs: http://localhost:8000/docs
 
 ---
 

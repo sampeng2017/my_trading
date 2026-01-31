@@ -48,6 +48,10 @@ python scripts/check_database.py     # View database status
 python scripts/run_system.py         # Run trading system
 python scripts/test_phase1_db.py     # Test database connection (local/Turso)
 python scripts/migrate_to_turso.py   # Migrate local DB to Turso cloud
+
+# REST API
+uvicorn src.api.main:app --port 8000  # Start API server
+open http://localhost:8000/docs       # Interactive API docs
 ```
 
 ## Architecture
@@ -138,6 +142,21 @@ All agents use `get_connection()` context manager for database access.
 - `stock_metadata`: Sector/industry info
 - `screener_results`: Cached screening outputs
 - `screener_runs`: Screening audit trail
+
+## REST API
+
+**`src/api/main.py`** - FastAPI server with API key authentication
+
+Endpoints (all require `X-API-Key` header except `/health`):
+- `GET /health` - Health check
+- `GET /portfolio/summary` - Portfolio equity and cash
+- `GET /portfolio/holdings` - Current holdings list
+- `GET /market/price/{symbol}` - Get latest price
+- `GET /agent/recommendations` - Recent strategy recommendations
+- `POST /agent/ask` - Ask trade advisor (natural language)
+
+Start server: `uvicorn src.api.main:app --port 8000`
+API docs: http://localhost:8000/docs
 
 ## Workflow
 
