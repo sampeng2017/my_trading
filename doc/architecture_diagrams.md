@@ -9,11 +9,13 @@ graph TB
         FINNHUB[Finnhub News]
         GEMINI[Google Gemini AI]
         YFINANCE[yfinance]
+        TURSO[Turso Cloud]
     end
 
     subgraph Core["Core System"]
         ORCH[Main Orchestrator]
-        DB[(SQLite Database)]
+        API[REST API<br/>FastAPI]
+        DB[(Database<br/>SQLite/Turso)]
     end
 
     subgraph Agents["Agent Pipeline"]
@@ -428,6 +430,52 @@ graph TD
     ENV[".env file"] -.->|env var substitution| Config
 ```
 
+## 11. REST API Architecture
+
+```mermaid
+flowchart TB
+    CLIENT[Client<br/>curl / Browser / App] --> AUTH{X-API-Key<br/>Valid?}
+
+    AUTH -->|No| REJECT[401 Unauthorized]
+    AUTH -->|Yes| ROUTER[FastAPI Router]
+
+    ROUTER --> PORTFOLIO[/portfolio/*]
+    ROUTER --> MARKET[/market/*]
+    ROUTER --> AGENT[/agent/*]
+
+    PORTFOLIO --> PA[Portfolio Accountant]
+    MARKET --> MA[Market Analyst]
+    AGENT --> SP[Strategy Planner]
+    AGENT --> TA[Trade Advisor]
+
+    PA --> DB[(Database<br/>Turso/SQLite)]
+    MA --> DB
+    SP --> DB
+    TA --> DB
+
+    style AUTH fill:#fff3e0
+    style REJECT fill:#ffcdd2
+    style DB fill:#e3f2fd
+```
+
+## 12. Database Modes
+
+```mermaid
+flowchart TD
+    APP[Application] --> CHECK{DB_MODE?}
+
+    CHECK -->|local| LOCAL[SQLite<br/>data/agent.db]
+    CHECK -->|turso| TURSO[Turso Cloud<br/>libsql://...]
+
+    LOCAL --> CONN[get_connection<br/>context manager]
+    TURSO --> CONN
+
+    CONN --> AGENTS[All Agents]
+
+    style LOCAL fill:#c8e6c9
+    style TURSO fill:#bbdefb
+```
+
 ## Reading Order Suggestion
 
 1. **Start here**: Diagram 1 (System Overview) + Diagram 2 (Pipeline Flow)
@@ -436,3 +484,5 @@ graph TD
 4. **Data model**: Diagram 7 (Database Schema)
 5. **AI integration**: Diagram 8 (Strategy Planner)
 6. **Output**: Diagram 9 (Notifications)
+7. **API access**: Diagram 11 (REST API)
+8. **Storage**: Diagram 12 (Database Modes)

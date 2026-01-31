@@ -439,13 +439,21 @@ Drop CSV files into `inbox/` folder and they'll be imported automatically.
  - **Update portfolio**: Export CSV from Fidelity → drop in `inbox/`
  
  ### Weekly Tasks
- 
+
  - **Clean old cache**: Remove market data older than 7 days
    ```bash
+   # Turso (cloud)
+   turso db shell samtrading "DELETE FROM market_data WHERE timestamp < datetime('now', '-7 days')"
+
+   # Local SQLite
    sqlite3 data/agent.db "DELETE FROM market_data WHERE timestamp < datetime('now', '-7 days')"
    ```
  - **Review risk decisions**: Check vetoed trades
    ```bash
+   # Turso (cloud)
+   turso db shell samtrading "SELECT * FROM risk_decisions WHERE approved = 0 ORDER BY timestamp DESC LIMIT 10"
+
+   # Local SQLite
    sqlite3 data/agent.db "SELECT * FROM risk_decisions WHERE approved = 0 ORDER BY timestamp DESC LIMIT 10"
    ```
  
@@ -496,16 +504,22 @@ Drop CSV files into `inbox/` folder and they'll be imported automatically.
  ```
  
  ### Check Database State
- 
+
+ **Option A: REST API (recommended)**
  ```bash
- # View recent snapshots
+ curl -H "X-API-Key: your-key" http://localhost:8000/portfolio/summary
+ curl -H "X-API-Key: your-key" http://localhost:8000/agent/recommendations
+ ```
+
+ **Option B: Turso CLI (cloud)**
+ ```bash
+ turso db shell samtrading "SELECT * FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 5"
+ ```
+
+ **Option C: SQLite (local only)**
+ ```bash
  sqlite3 data/agent.db "SELECT * FROM portfolio_snapshot ORDER BY import_timestamp DESC LIMIT 5"
- 
- # View cached prices
  sqlite3 data/agent.db "SELECT symbol, price, timestamp FROM market_data ORDER BY timestamp DESC LIMIT 10"
- 
- # View notification history
- sqlite3 data/agent.db "SELECT * FROM notification_log ORDER BY timestamp DESC LIMIT 10"
  ```
  
  ### Reset Database
