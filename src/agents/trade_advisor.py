@@ -93,7 +93,7 @@ class TradeAdvisor:
                 prompt,
                 generation_config=genai.GenerationConfig(
                     temperature=self.temperature,
-                    max_output_tokens=1500
+                    max_output_tokens=2000
                 )
             )
         
@@ -492,6 +492,32 @@ Respond ONLY with valid JSON."""
                 return json.loads(text[start:end])
             except json.JSONDecodeError:
                 pass
+        
+        # Try to repair truncated JSON - extract what we can
+        if start != -1:
+            json_fragment = text[start:]
+            # Try to extract recommendation
+            rec_match = re.search(r'"recommendation"\s*:\s*"([^"]+)"', json_fragment)
+            conf_match = re.search(r'"confidence"\s*:\s*([\d.]+)', json_fragment)
+            
+            if rec_match:
+                # Extract analysis points that are complete
+                analysis = []
+                analysis_matches = re.findall(r'"([^"]{10,}?)"(?=\s*[,\]])', json_fragment)
+                for a in analysis_matches[:5]:
+                    if len(a) > 20 and not a.startswith('{'):
+                        analysis.append(a)
+                
+                # Extract reasoning if present
+                reason_match = re.search(r'"reasoning"\s*:\s*"([^"]+)', json_fragment)
+                reasoning = reason_match.group(1) if reason_match else 'Response was truncated'
+                
+                return {
+                    'recommendation': rec_match.group(1),
+                    'confidence': float(conf_match.group(1)) if conf_match else 0.5,
+                    'analysis': analysis if analysis else ['Response was truncated but recommendation extracted'],
+                    'reasoning': reasoning
+                }
         
         logger.warning(f"Failed to parse advisor response: {response_text[:200]}...")
         return {
