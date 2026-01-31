@@ -446,6 +446,16 @@ Now just save Fidelity CSVs to `inbox/` and they import automatically.
 Start API: `uvicorn src.api.main:app --port 8000`
 API Docs: http://localhost:8000/docs
 
+### Database Backup/Restore
+
+```bash
+# Backup cloud data to local (recommended weekly)
+python scripts/sync_db.py --backup
+
+# Restore local backup to cloud (if needed)
+python scripts/sync_db.py --restore
+```
+
 ---
 
 ## Safety Reminders

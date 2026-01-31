@@ -48,6 +48,8 @@ python scripts/check_database.py     # View database status
 python scripts/run_system.py         # Run trading system
 python scripts/test_phase1_db.py     # Test database connection (local/Turso)
 python scripts/migrate_to_turso.py   # Migrate local DB to Turso cloud
+python scripts/sync_db.py --backup   # Backup: Cloud → Local
+python scripts/sync_db.py --restore  # Restore: Local → Cloud
 
 # REST API
 uvicorn src.api.main:app --port 8000  # Start API server
