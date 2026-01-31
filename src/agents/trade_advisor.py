@@ -445,15 +445,15 @@ INSTRUCTIONS:
 3. Consider risks and opportunities
 4. Provide a clear, actionable recommendation
 
-OUTPUT FORMAT (JSON only, no markdown):
+OUTPUT FORMAT (JSON only, no markdown, keep it concise):
 {{
   "recommendation": "PROCEED" | "CAUTION" | "AVOID" | "MORE_INFO_NEEDED",
   "confidence": 0.0-1.0,
-  "analysis": ["bullet point 1", "bullet point 2", "bullet point 3"],
-  "reasoning": "Detailed explanation in 50-100 words"
+  "analysis": ["short point 1", "short point 2", "short point 3"],
+  "reasoning": "Brief explanation in 30-50 words max"
 }}
 
-Respond ONLY with valid JSON."""
+Respond ONLY with valid JSON. Keep analysis points SHORT (under 60 chars each)."""
 
         return prompt
     
