@@ -185,12 +185,8 @@ async def trigger_run(request: Request):
         body = await request.json()
         mode = body.get("mode", "market")
 
-        # Call orchestrator directly instead of HTTP
-        from pydantic import BaseModel
-        class RunReq(BaseModel):
-            mode: str = mode
-        
-        result = await orch_module.run_orchestrator(RunReq(mode=mode), _="direct")
+        # Call orchestrator directly using its RunRequest model
+        result = await orch_module.run_orchestrator(orch_module.RunRequest(mode=mode), _="direct")
         return JSONResponse(result.model_dump())
     except HTTPException as e:
         # Preserve the original status code and use 'detail' for consistency
