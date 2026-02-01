@@ -61,4 +61,89 @@
     <p>No portfolio data available. Import a Fidelity CSV to get started.</p>
 </div>
 {% endif %}
+
+<!-- Upload Section -->
+{% if user %}
+<section class="card">
+    <h2>Import Portfolio CSV</h2>
+    <p class="upload-hint">Upload a Fidelity CSV export to update your portfolio.</p>
+
+    <div id="upload-area" class="upload-area">
+        <div class="upload-icon">📄</div>
+        <p>Drag and drop your CSV file here</p>
+        <p class="upload-or">or</p>
+        <label class="btn btn-upload">
+            Choose File
+            <input type="file" id="csv-file" accept=".csv" style="display: none;">
+        </label>
+    </div>
+
+    <div id="upload-status" class="upload-status"></div>
+</section>
+
+<script>
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('csv-file');
+    const statusDiv = document.getElementById('upload-status');
+
+    // Drag and drop handlers
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFile(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFile(e.target.files[0]);
+        }
+    });
+
+    async function handleFile(file) {
+        if (!file.name.endsWith('.csv')) {
+            statusDiv.innerHTML = '<span class="status-error">Please select a CSV file</span>';
+            return;
+        }
+
+        statusDiv.innerHTML = '<span class="status-pending">Uploading...</span>';
+        uploadArea.classList.add('uploading');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/api/portfolio/import', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || data.error || data.detail) {
+                statusDiv.innerHTML = `<span class="status-error">Error: ${data.error || data.detail || 'Upload failed'}</span>`;
+            } else {
+                statusDiv.innerHTML = `<span class="status-completed">✓ Imported successfully! Snapshot #${data.snapshot_id}</span>`;
+                // Reload to show new data
+                setTimeout(() => window.location.reload(), 1500);
+            }
+        } catch (error) {
+            statusDiv.innerHTML = `<span class="status-error">Error: ${error.message}</span>`;
+        } finally {
+            uploadArea.classList.remove('uploading');
+        }
+    }
+</script>
+{% endif %}
 {% endblock %}

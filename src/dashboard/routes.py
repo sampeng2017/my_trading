@@ -2,9 +2,10 @@
 Dashboard routes - server-side rendered pages.
 """
 import os
+import tempfile
 from datetime import datetime, timedelta
 from collections import Counter
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
 from src.api.auth import get_current_user
@@ -241,3 +242,65 @@ async def get_recommended_mode(request: Request):
         return JSONResponse({"error": e.detail}, status_code=e.status_code)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.post("/api/portfolio/import")
+async def import_portfolio(request: Request, file: UploadFile = File(...)):
+    """Import a Fidelity CSV portfolio export."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    # Validate filename extension
+    if not file.filename.endswith('.csv'):
+        return JSONResponse({"error": "File must be a CSV"}, status_code=400)
+
+    # Validate MIME type (browsers may send various types for CSV)
+    allowed_types = {'text/csv', 'application/csv', 'text/plain', 'application/vnd.ms-excel'}
+    if file.content_type and file.content_type not in allowed_types:
+        return JSONResponse({"error": f"Invalid file type: {file.content_type}"}, status_code=400)
+
+    tmp_path = None
+    try:
+        # Stream with size limit (1MB max) - abort early if exceeded
+        max_size = 1 * 1024 * 1024  # 1MB
+        chunk_size = 64 * 1024  # 64KB chunks
+        total_size = 0
+        chunks = []
+
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > max_size:
+                return JSONResponse({"error": "File too large (max 1MB)"}, status_code=400)
+            chunks.append(chunk)
+
+        content = b''.join(chunks)
+
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.csv', delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Import using PortfolioAccountant
+        pa = get_portfolio_accountant()
+        snapshot_id = pa.import_fidelity_csv(tmp_path)
+
+        if snapshot_id:
+            return JSONResponse({
+                "success": True,
+                "snapshot_id": snapshot_id,
+                "message": "Portfolio imported successfully"
+            })
+        else:
+            return JSONResponse({"error": "Import failed - no data parsed"}, status_code=400)
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        # Always clean up temp file
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+

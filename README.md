@@ -25,6 +25,9 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 ## Features
  
  - **Web Dashboard**: Server-rendered UI with GitHub OAuth, portfolio views, and orchestrator controls
+ - **Portfolio CSV Upload**: Drag-and-drop Fidelity CSV import via web browser
+ - **Real-Time Run Logs**: Live progress display during orchestrator runs
+ - **Smart Mode Suggestions**: Time-based recommendations (premarket/market/postmarket) with confirmation dialogs
  - **Chat Interface**: Conversational trade advisor for natural language questions
  - **Rest API**: High-performance FastAPI backend with secure API Key authentication
  - **Cloud Database**: Turso (libSQL) integration for cross-device data access

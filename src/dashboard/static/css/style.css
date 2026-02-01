@@ -572,3 +572,54 @@ footer {
         box-shadow: 0 0 16px rgba(76, 175, 80, 0.7);
     }
 }
+
+/* Upload Area */
+.upload-hint {
+    color: #666;
+    margin-bottom: 1rem;
+}
+
+.upload-area {
+    border: 2px dashed #ccc;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: #fafafa;
+}
+
+.upload-area:hover {
+    border-color: #4CAF50;
+    background: #f0f8f0;
+}
+
+.upload-area.dragover {
+    border-color: #4CAF50;
+    background: #e8f5e9;
+    transform: scale(1.02);
+}
+
+.upload-area.uploading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-or {
+    color: #999;
+    margin: 0.5rem 0;
+}
+
+.btn-upload {
+    cursor: pointer;
+    display: inline-block;
+}
+
+.upload-status {
+    margin-top: 1rem;
+    text-align: center;
+}

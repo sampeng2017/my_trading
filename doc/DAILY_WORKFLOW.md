@@ -92,6 +92,13 @@ Note: `.env` is loaded automatically by python-dotenv.
 
 #### 1.3 Import Your Portfolio
 
+**Option A: Web Dashboard (Recommended)**
+1. Go to http://localhost:8000/portfolio (or your Railway URL)
+2. Scroll to "Import Portfolio CSV"
+3. Drag and drop your Fidelity CSV or click "Choose File"
+4. Page refreshes with new portfolio data
+
+**Option B: Command Line**
 ```bash
 python scripts/import_portfolio.py
 ```
