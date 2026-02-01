@@ -55,19 +55,22 @@
     </div>
 
     {% if recommendations %}
-    <table class="table">
+    <table class="table sortable" id="recommendations-table">
         <thead>
             <tr>
-                <th>Time</th>
-                <th>Symbol</th>
-                <th>Action</th>
-                <th>Confidence</th>
+                <th class="sortable-header" data-sort="time" data-type="date">Time <span class="sort-icon">↕</span></th>
+                <th class="sortable-header" data-sort="symbol" data-type="string">Symbol <span
+                        class="sort-icon">↕</span></th>
+                <th class="sortable-header" data-sort="action" data-type="string">Action <span
+                        class="sort-icon">↕</span></th>
+                <th class="sortable-header" data-sort="confidence" data-type="number">Confidence <span
+                        class="sort-icon">↕</span></th>
                 <th>Reasoning</th>
             </tr>
         </thead>
         <tbody>
             {% for r in recommendations %}
-            <tr>
+            <tr data-timestamp="{{ r.timestamp or '' }}">
                 <td>{{ r.formatted_time or 'N/A' }}</td>
                 <td><strong>{{ r.symbol }}</strong></td>
                 <td class="action-{{ r.action|lower }}">{{ r.action }}</td>
@@ -81,4 +84,67 @@
     <p>No recommendations found for this time period.</p>
     {% endif %}
 </section>
+
+<script>
+    // Sortable table functionality
+    document.addEventListener('DOMContentLoaded', function () {
+        const table = document.getElementById('recommendations-table');
+        if (!table) return;
+
+        const headers = table.querySelectorAll('.sortable-header');
+        let currentSort = { column: null, direction: 'asc' };
+
+        headers.forEach((header, index) => {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', () => sortTable(index, header));
+        });
+
+        function sortTable(columnIndex, header) {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const sortType = header.dataset.type || 'string';
+            const sortKey = header.dataset.sort;
+
+            // Toggle direction
+            const direction = (currentSort.column === columnIndex && currentSort.direction === 'asc') ? 'desc' : 'asc';
+            currentSort = { column: columnIndex, direction };
+
+            // Update sort icons
+            headers.forEach(h => {
+                const icon = h.querySelector('.sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
+            const currentIcon = header.querySelector('.sort-icon');
+            if (currentIcon) currentIcon.textContent = direction === 'asc' ? '↑' : '↓';
+
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal, bVal;
+
+                if (sortKey === 'time') {
+                    aVal = a.dataset.timestamp || '';
+                    bVal = b.dataset.timestamp || '';
+                } else if (sortKey === 'confidence') {
+                    aVal = parseFloat(a.cells[columnIndex].textContent) || 0;
+                    bVal = parseFloat(b.cells[columnIndex].textContent) || 0;
+                } else {
+                    aVal = a.cells[columnIndex].textContent.trim().toLowerCase();
+                    bVal = b.cells[columnIndex].textContent.trim().toLowerCase();
+                }
+
+                let result;
+                if (sortType === 'number') {
+                    result = aVal - bVal;
+                } else {
+                    result = aVal.localeCompare(bVal);
+                }
+
+                return direction === 'asc' ? result : -result;
+            });
+
+            // Reorder rows
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    });
+</script>
 {% endblock %}
