@@ -875,36 +875,36 @@ ns.send_email('Test from cloud', 'This is a test email.')
 
 ## Verification Checklist
 
-### Phase 1 Complete
-- [ ] Turso account created
-- [ ] Database created and schema loaded
-- [ ] Auth token saved in `.env`
-- [ ] `libsql-experimental` installed
-- [ ] `db_connection.py` created
-- [ ] Agent files updated to use `get_connection()`
-- [ ] Can query Turso from Python
+### Phase 1 Complete ✅
+- [x] Turso account created
+- [x] Database created and schema loaded
+- [x] Auth token saved in `.env`
+- [x] `libsql-experimental` installed
+- [x] `db_connection.py` created
+- [x] Agent files updated to use `get_connection()`
+- [x] Can query Turso from Python
 
-### Phase 2 Complete
- - [ ] FastAPI installed
- - [ ] API structure created (`src/api/routers`)
- - [ ] Security: `API_KEY` set in environment
- - [ ] Dependencies installed (`fastapi`, `uvicorn`, `httpx`)
- - [ ] `/portfolio/summary` returns data (via API Key)
- - [ ] `/market/price/{symbol}` returns data (via API Key)
- - [ ] `/health` returns system info (Public)
- - [ ] `/portfolio/*`, `/market/*`, `/agent/*` return 401 if key missing
- - [ ] Unit tests passing with `API_KEY` set
- 
- ### Phase 3 Complete
- - [ ] Auth dependencies installed (`authlib`, `itsdangerous`, `jinja2`) + `httpx` from Phase 2
- - [ ] GitHub OAuth App created & Client ID/Secret saved
- - [ ] `SESSION_SECRET` set
- - [ ] Configuration updated with `GITHUB_ALLOWED_USERS`
- - [ ] Authentication logic implemented (`src/api/auth.py`)
- - [ ] Dashboard templates created
- - [ ] `/auth/login` redirects to GitHub
- - [ ] Dashboard accessible at `http://localhost:8000`
- - [ ] Can view portfolio on browser (Login required for actions)
+### Phase 2 Complete ✅
+- [x] FastAPI installed
+- [x] API structure created (`src/api/routers`)
+- [x] Security: `API_KEY` set in environment
+- [x] Dependencies installed (`fastapi`, `uvicorn`, `httpx`)
+- [x] `/portfolio/summary` returns data (via API Key)
+- [x] `/market/price/{symbol}` returns data (via API Key)
+- [x] `/health` returns system info (Public)
+- [x] `/portfolio/*`, `/market/*`, `/agent/*` return 401 if key missing
+- [x] Unit tests passing with `API_KEY` set
+
+### Phase 3 Complete ✅
+- [x] Auth dependencies installed (`authlib`, `itsdangerous`, `jinja2`) + `httpx` from Phase 2
+- [x] GitHub OAuth App created & Client ID/Secret saved
+- [x] `SESSION_SECRET` set
+- [x] Configuration updated with `GITHUB_ALLOWED_USERS`
+- [x] Authentication logic implemented (`src/api/auth.py`)
+- [x] Dashboard templates created
+- [x] `/auth/login` redirects to GitHub
+- [x] Dashboard accessible at `http://localhost:8000`
+- [x] Can view portfolio on browser (Login required for actions)
 
 ### Phase 4 Complete
 - [ ] Railway account created

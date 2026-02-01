@@ -51,8 +51,9 @@ python scripts/migrate_to_turso.py   # Migrate local DB to Turso cloud
 python scripts/sync_db.py --backup   # Backup: Cloud → Local
 python scripts/sync_db.py --restore  # Restore: Local → Cloud
 
-# REST API
+# REST API & Dashboard
 uvicorn src.api.main:app --port 8000  # Start API server
+open http://localhost:8000            # Web dashboard
 open http://localhost:8000/docs       # Interactive API docs
 ```
 
@@ -104,6 +105,13 @@ ALPHA_VANTAGE_API_KEY=your-key       # Optional (backup for screener)
 DB_MODE=local                        # 'local' for SQLite, 'turso' for cloud
 TURSO_DATABASE_URL=libsql://...      # Required if DB_MODE=turso
 TURSO_AUTH_TOKEN=your-token          # Required if DB_MODE=turso
+
+# REST API & Dashboard
+API_KEY=your-secure-key              # Required for API access
+SESSION_SECRET=your-secret           # Required for dashboard sessions
+GITHUB_CLIENT_ID=your-client-id      # Required for dashboard login
+GITHUB_CLIENT_SECRET=your-secret     # Required for dashboard login
+GITHUB_ALLOWED_USERS=your-username   # Comma-separated GitHub usernames
 ```
 
 The `.env` file is loaded automatically by python-dotenv.
@@ -145,20 +153,30 @@ All agents use `get_connection()` context manager for database access.
 - `screener_results`: Cached screening outputs
 - `screener_runs`: Screening audit trail
 
-## REST API
+## REST API & Web Dashboard
 
-**`src/api/main.py`** - FastAPI server with API key authentication
+**`src/api/main.py`** - FastAPI server with dual authentication:
+- **API routes** (`/portfolio/*`, `/market/*`, `/agent/*`): Protected by `X-API-Key` header
+- **Dashboard routes** (`/`, `/portfolio`, `/recommendations`): Protected by GitHub OAuth session
 
-Endpoints (all require `X-API-Key` header except `/health`):
-- `GET /health` - Health check
+### API Endpoints (require `X-API-Key` header)
+- `GET /health` - Health check (public)
 - `GET /portfolio/summary` - Portfolio equity and cash
 - `GET /portfolio/holdings` - Current holdings list
 - `GET /market/price/{symbol}` - Get latest price
 - `GET /agent/recommendations` - Recent strategy recommendations
 - `POST /agent/ask` - Ask trade advisor (natural language)
 
+### Web Dashboard (GitHub OAuth)
+- `GET /` - Dashboard home with portfolio summary
+- `GET /portfolio` - Full holdings view
+- `GET /recommendations` - Trade recommendations list
+- `GET /auth/login` - Login with GitHub
+- `GET /auth/logout` - Logout
+
 Start server: `uvicorn src.api.main:app --port 8000`
-API docs: http://localhost:8000/docs
+- API docs: http://localhost:8000/docs
+- Dashboard: http://localhost:8000/
 
 ## Workflow
 
