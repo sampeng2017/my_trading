@@ -5,7 +5,55 @@
 {% block content %}
 <h1>Trade Recommendations</h1>
 
+<!-- Analytics Summary -->
+{% if analytics and analytics.total > 0 %}
+<section class="card analytics-card">
+    <h2>Summary</h2>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-label">Total</span>
+            <span class="stat-value">{{ analytics.total }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">BUY</span>
+            <span class="stat-value action-buy">{{ analytics.by_action.BUY }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">SELL</span>
+            <span class="stat-value action-sell">{{ analytics.by_action.SELL }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">HOLD</span>
+            <span class="stat-value action-hold">{{ analytics.by_action.HOLD }}</span>
+        </div>
+    </div>
+
+    {% if analytics.top_symbols %}
+    <div class="top-symbols">
+        <h3>Most Recommended</h3>
+        <div class="symbol-chips">
+            {% for symbol, count in analytics.top_symbols %}
+            <span class="symbol-chip">{{ symbol }} <small>({{ count }})</small></span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+<!-- Filter and Table -->
 <section class="card">
+    <div class="filter-bar">
+        <label for="days-filter">Show:</label>
+        <select id="days-filter" onchange="window.location.href='/recommendations?days=' + this.value">
+            <option value="1" {% if selected_days==1 %}selected{% endif %}>Today</option>
+            <option value="7" {% if selected_days==7 %}selected{% endif %}>Last 7 days</option>
+            <option value="30" {% if selected_days==30 %}selected{% endif %}>Last 30 days</option>
+            <option value="0" {% if selected_days==0 %}selected{% endif %}>All time</option>
+        </select>
+        <span class="result-count">{{ recommendations|length }} recommendations</span>
+    </div>
+
     {% if recommendations %}
     <table class="table">
         <thead>
@@ -20,7 +68,7 @@
         <tbody>
             {% for r in recommendations %}
             <tr>
-                <td>{{ r.created_at or r.timestamp or 'N/A' }}</td>
+                <td>{{ r.formatted_time or 'N/A' }}</td>
                 <td><strong>{{ r.symbol }}</strong></td>
                 <td class="action-{{ r.action|lower }}">{{ r.action }}</td>
                 <td>{{ "%.0f"|format((r.confidence or 0) * 100) }}%</td>
@@ -30,7 +78,7 @@
         </tbody>
     </table>
     {% else %}
-    <p>No recommendations yet. Run the trading system to generate recommendations.</p>
+    <p>No recommendations found for this time period.</p>
     {% endif %}
 </section>
 {% endblock %}

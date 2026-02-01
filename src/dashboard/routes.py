@@ -2,6 +2,8 @@
 Dashboard routes - server-side rendered pages.
 """
 import os
+from datetime import datetime, timedelta
+from collections import Counter
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 from src.api.auth import get_current_user
@@ -14,13 +16,23 @@ templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=templates_dir)
 
 
+def format_timestamp(iso_timestamp: str) -> str:
+    """Convert ISO timestamp to readable format: 'Jan 30, 1:50 PM'"""
+    if not iso_timestamp:
+        return 'N/A'
+    try:
+        dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
+        return dt.strftime('%b %d, %I:%M %p')
+    except:
+        return iso_timestamp[:16].replace('T', ' ')
+
+
 @router.get("/")
 async def dashboard_home(request: Request):
     """Dashboard home page."""
     user = await get_current_user(request)
     error = request.query_params.get('error')
 
-    # Get portfolio data (server-side, no API key needed)
     portfolio = None
     holdings = []
     try:
@@ -35,7 +47,7 @@ async def dashboard_home(request: Request):
         "user": user,
         "error": error,
         "portfolio": portfolio,
-        "holdings": holdings[:5] if holdings else [],  # Top 5 holdings
+        "holdings": holdings[:5] if holdings else [],
     })
 
 
@@ -62,15 +74,47 @@ async def portfolio_page(request: Request):
 
 
 @router.get("/recommendations")
-async def recommendations_page(request: Request):
-    """Trade recommendations view."""
+async def recommendations_page(request: Request, days: int = 7):
+    """Trade recommendations view with date filter and analytics."""
     user = await get_current_user(request)
 
-    # Get recent recommendations
     recommendations = []
+    analytics = {
+        'total': 0,
+        'by_action': {'BUY': 0, 'SELL': 0, 'HOLD': 0},
+        'top_symbols': [],
+    }
+
     try:
         sp = get_strategy_planner()
-        recommendations = sp.get_recent_recommendations(limit=20)
+        raw_recommendations = sp.get_recent_recommendations(limit=100)
+
+        # Filter by days
+        if days > 0:
+            cutoff = datetime.now() - timedelta(days=days)
+            cutoff_str = cutoff.isoformat()
+            raw_recommendations = [
+                r for r in raw_recommendations
+                if r.get('timestamp', '') >= cutoff_str
+            ]
+
+        # Format timestamps
+        for r in raw_recommendations:
+            r['formatted_time'] = format_timestamp(r.get('timestamp'))
+
+        recommendations = raw_recommendations
+
+        # Calculate analytics
+        analytics['total'] = len(recommendations)
+
+        for r in recommendations:
+            action = r.get('action', 'HOLD').upper()
+            if action in analytics['by_action']:
+                analytics['by_action'][action] += 1
+
+        symbol_counts = Counter(r.get('symbol') for r in recommendations)
+        analytics['top_symbols'] = symbol_counts.most_common(5)
+
     except Exception:
         pass
 
@@ -78,4 +122,6 @@ async def recommendations_page(request: Request):
         "request": request,
         "user": user,
         "recommendations": recommendations,
+        "selected_days": days,
+        "analytics": analytics,
     })
