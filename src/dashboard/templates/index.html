@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Trading System{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+{% if not user %}
+<div class="alert alert-info">
+    <p>Login with GitHub to access full features.</p>
+</div>
+{% endif %}
+
+<section class="card">
+    <h2>Portfolio Summary</h2>
+    {% if portfolio %}
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-label">Total Equity</span>
+            <span class="stat-value">${{ "%.2f"|format(portfolio.equity or 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Cash Balance</span>
+            <span class="stat-value">${{ "%.2f"|format(portfolio.cash or 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Positions</span>
+            <span class="stat-value">{{ holdings|length }}</span>
+        </div>
+    </div>
+
+    {% if holdings %}
+    <h3>Top Holdings</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in holdings %}
+            <tr>
+                <td>{{ h.symbol }}</td>
+                <td>{{ "%.2f"|format(h.quantity or 0) }}</td>
+                <td>${{ "%.2f"|format(h.current_value or 0) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="/portfolio" class="btn">View All Holdings</a>
+    {% endif %}
+
+    {% else %}
+    <p>No portfolio data available. Import a Fidelity CSV to get started.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Quick Links</h2>
+    <div class="quick-links">
+        <a href="/portfolio" class="btn">Full Portfolio</a>
+        <a href="/recommendations" class="btn">Recommendations</a>
+    </div>
+</section>
+{% endblock %}

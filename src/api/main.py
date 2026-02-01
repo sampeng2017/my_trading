@@ -1,31 +1,77 @@
+"""
+Trading System REST API
+"""
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
+
+# Load environment variables FIRST
+load_dotenv()
+
+from src.api.routers import market, portfolio, agent, auth
 from src.api.dependencies import verify_api_key
+from src.api.auth import init_oauth
+from src.dashboard import routes as dashboard
 
 app = FastAPI(
     title="Trading System API",
-    description="REST API for the AI-powered trading system",
+    description="Stock Trading Intelligence System API",
     version="1.0.0"
 )
 
-# CORS 
-# TODO: In production, replace ["*"] with specific frontend domains
+# Session middleware (MUST be added before routers)
+session_secret = os.getenv("SESSION_SECRET")
+if session_secret:
+    app.add_middleware(SessionMiddleware, secret_key=session_secret)
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Cannot be True with allow_origins=["*"]
+    allow_origins=["*"],  # Restrict in production
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Health Check
+# Initialize OAuth
+init_oauth()
+
+# Mount static files for dashboard
+static_dir = os.path.join(os.path.dirname(__file__), "..", "dashboard", "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Health check (public)
 @app.get("/health")
 async def health_check():
+    """Health check endpoint."""
     return {"status": "ok", "version": "1.0.0"}
 
-# Protected Routes
-from src.api.routers import market, portfolio, agent
+# Auth routes (public - OAuth flow)
+app.include_router(auth.router)
 
-app.include_router(market.router, prefix="/market", tags=["Market"], dependencies=[Depends(verify_api_key)])
-app.include_router(portfolio.router, prefix="/portfolio", tags=["Portfolio"], dependencies=[Depends(verify_api_key)])
-app.include_router(agent.router, prefix="/agent", tags=["Agent"], dependencies=[Depends(verify_api_key)])
+# Dashboard routes (public/OAuth protected - server-side rendering)
+app.include_router(dashboard.router)
+
+# API routes (API key protected)
+app.include_router(
+    portfolio.router,
+    prefix="/portfolio",
+    tags=["portfolio"],
+    dependencies=[Depends(verify_api_key)]
+)
+app.include_router(
+    market.router,
+    prefix="/market",
+    tags=["market"],
+    dependencies=[Depends(verify_api_key)]
+)
+app.include_router(
+    agent.router,
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(verify_api_key)]
+)

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Recommendations - Trading System{% endblock %}
+
+{% block content %}
+<h1>Trade Recommendations</h1>
+
+<section class="card">
+    {% if recommendations %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Action</th>
+                <th>Confidence</th>
+                <th>Reasoning</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in recommendations %}
+            <tr>
+                <td>{{ r.created_at or r.timestamp or 'N/A' }}</td>
+                <td><strong>{{ r.symbol }}</strong></td>
+                <td class="action-{{ r.action|lower }}">{{ r.action }}</td>
+                <td>{{ "%.0f"|format((r.confidence or 0) * 100) }}%</td>
+                <td class="reasoning">{{ r.reasoning[:100] }}{% if r.reasoning|length > 100 %}...{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No recommendations yet. Run the trading system to generate recommendations.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - Trading System{% endblock %}
+
+{% block content %}
+<h1>Portfolio</h1>
+
+{% if portfolio %}
+<section class="card">
+    <h2>Summary</h2>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-label">Total Equity</span>
+            <span class="stat-value">${{ "%.2f"|format(portfolio.equity or 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Cash Balance</span>
+            <span class="stat-value">${{ "%.2f"|format(portfolio.cash or 0) }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Last Updated</span>
+            <span class="stat-value">{{ portfolio.last_updated[:19].replace('T', ' ') if portfolio.last_updated else
+                'N/A' }}</span>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Holdings</h2>
+    {% if holdings %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Cost Basis</th>
+                <th>Current Value</th>
+                <th>Unrealized P/L</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in holdings %}
+            <tr>
+                <td><strong>{{ h.symbol }}</strong></td>
+                <td>{{ "%.2f"|format(h.quantity or 0) }}</td>
+                <td>${{ "%.2f"|format(h.cost_basis or 0) }}</td>
+                <td>${{ "%.2f"|format(h.current_value or 0) }}</td>
+                <td class="{{ 'positive' if (h.unrealized_pl or 0) >= 0 else 'negative' }}">
+                    ${{ "%.2f"|format(h.unrealized_pl or 0) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No holdings found.</p>
+    {% endif %}
+</section>
+{% else %}
+<div class="alert alert-info">
+    <p>No portfolio data available. Import a Fidelity CSV to get started.</p>
+</div>
+{% endif %}
+{% endblock %}
