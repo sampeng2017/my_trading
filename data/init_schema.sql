@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS screener_runs (
     error TEXT
 );
 
+-- Orchestrator Runs (triggered via API or scheduled)
+CREATE TABLE IF NOT EXISTS orchestrator_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mode TEXT NOT NULL CHECK(mode IN ('premarket', 'market', 'postmarket', 'review')),
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped')),
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    error_message TEXT,
+    triggered_by TEXT DEFAULT 'manual' CHECK(triggered_by IN ('manual', 'scheduled'))
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_market_data_symbol ON market_data(symbol, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_news_symbol ON news_analysis(symbol, timestamp DESC);
@@ -129,3 +140,4 @@ CREATE INDEX IF NOT EXISTS idx_holdings_snapshot ON holdings(snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON strategy_recommendations(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp ON portfolio_snapshot(import_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_screener_results_timestamp ON screener_results(screening_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_orchestrator_status ON orchestrator_runs(status);

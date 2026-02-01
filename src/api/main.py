@@ -11,7 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 # Load environment variables FIRST
 load_dotenv()
 
-from src.api.routers import market, portfolio, agent, auth
+from src.api.routers import market, portfolio, agent, auth, orchestrator
 from src.api.dependencies import verify_api_key
 from src.api.auth import init_oauth
 from src.dashboard import routes as dashboard
@@ -73,5 +73,9 @@ app.include_router(
     agent.router,
     prefix="/agent",
     tags=["agent"],
+    dependencies=[Depends(verify_api_key)]
+)
+app.include_router(
+    orchestrator.router,
     dependencies=[Depends(verify_api_key)]
 )

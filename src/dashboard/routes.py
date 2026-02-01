@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 from collections import Counter
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
 from src.api.auth import get_current_user
-from src.api.dependencies import get_portfolio_accountant, get_strategy_planner
+from src.api.dependencies import get_portfolio_accountant, get_strategy_planner, get_trade_advisor
 
 router = APIRouter(tags=["dashboard"])
 
@@ -125,3 +126,106 @@ async def recommendations_page(request: Request, days: int = 7):
         "selected_days": days,
         "analytics": analytics,
     })
+
+
+# ========================
+# Chat Interface
+# ========================
+
+@router.get("/chat")
+async def chat_page(request: Request):
+    """Chat interface page."""
+    user = await get_current_user(request)
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "user": user,
+    })
+
+
+@router.post("/api/chat")
+async def chat_api(request: Request):
+    """Direct call to trade advisor for chat."""
+    user = await get_current_user(request)
+
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        body = await request.json()
+        question = body.get("question", "")
+
+        if not question:
+            return JSONResponse({"error": "Question is required"}, status_code=400)
+
+        ta = get_trade_advisor()
+        result = ta.ask(question)
+        return JSONResponse(result)
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ========================
+# Orchestrator Controls
+# ========================
+
+# Import orchestrator functions directly to avoid HTTP calls
+from src.api.routers import orchestrator as orch_module
+from fastapi import HTTPException
+
+
+@router.post("/api/orchestrator/run")
+async def trigger_run(request: Request):
+    """Trigger orchestrator run from dashboard."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        body = await request.json()
+        mode = body.get("mode", "market")
+
+        # Call orchestrator directly instead of HTTP
+        from pydantic import BaseModel
+        class RunReq(BaseModel):
+            mode: str = mode
+        
+        result = await orch_module.run_orchestrator(RunReq(mode=mode), _="direct")
+        return JSONResponse(result.model_dump())
+    except HTTPException as e:
+        # Preserve the original status code and use 'detail' for consistency
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/orchestrator/status/{job_id}")
+async def get_status(request: Request, job_id: int):
+    """Get orchestrator run status."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        result = await orch_module.get_run_status(job_id, _="direct")
+        return JSONResponse(result)
+    except HTTPException as e:
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/orchestrator/current")
+async def get_current(request: Request):
+    """Check if orchestrator is running."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        result = await orch_module.get_current_run(_="direct")
+        return JSONResponse(result)
+    except HTTPException as e:
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)

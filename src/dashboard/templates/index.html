@@ -57,11 +57,128 @@
     {% endif %}
 </section>
 
+<!-- Orchestrator Controls -->
+{% if user %}
+<section class="card">
+    <h2>Run Trading System</h2>
+    <div id="run-status" class="run-status"></div>
+    <div class="run-buttons">
+        <button class="btn btn-run" onclick="triggerRun('premarket')">
+            Run Premarket Scan
+        </button>
+        <button class="btn btn-run" onclick="triggerRun('market')">
+            Run Market Analysis
+        </button>
+        <button class="btn btn-run" onclick="triggerRun('postmarket')">
+            Run Postmarket Summary
+        </button>
+    </div>
+</section>
+
+<script>
+    let currentJobId = null;
+    let pollInterval = null;
+
+    async function triggerRun(mode) {
+        const statusDiv = document.getElementById('run-status');
+        const buttons = document.querySelectorAll('.btn-run');
+
+        buttons.forEach(btn => btn.disabled = true);
+        statusDiv.innerHTML = '<span class="status-pending">Starting...</span>';
+
+        try {
+            const response = await fetch('/api/orchestrator/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            });
+
+            const data = await response.json();
+
+            // Check both error formats: our custom { error } and FastAPI's { detail }
+            const errorMsg = data.error || data.detail;
+            if (!response.ok || errorMsg) {
+                statusDiv.innerHTML = `<span class="status-error">Error: ${errorMsg || 'Request failed'}</span>`;
+                buttons.forEach(btn => btn.disabled = false);
+                return;
+            }
+
+            currentJobId = data.job_id;
+            statusDiv.innerHTML = `<span class="status-running">Running ${mode}...</span>`;
+
+            // Poll for status
+            pollInterval = setInterval(checkStatus, 3000);
+
+        } catch (error) {
+            statusDiv.innerHTML = `<span class="status-error">Error: ${error.message}</span>`;
+            buttons.forEach(btn => btn.disabled = false);
+        }
+    }
+
+    async function checkStatus() {
+        if (!currentJobId) return;
+
+        try {
+            const response = await fetch(`/api/orchestrator/status/${currentJobId}`);
+            const data = await response.json();
+
+            const statusDiv = document.getElementById('run-status');
+            const buttons = document.querySelectorAll('.btn-run');
+
+            // Check for error responses (401, 404, etc.)
+            const errorMsg = data.error || data.detail;
+            if (!response.ok || errorMsg) {
+                statusDiv.innerHTML = `<span class="status-error">Error: ${errorMsg || 'Status check failed'}</span>`;
+                clearInterval(pollInterval);
+                currentJobId = null;
+                buttons.forEach(btn => btn.disabled = false);
+                return;
+            }
+
+            if (data.status === 'completed') {
+                statusDiv.innerHTML = '<span class="status-completed">✓ Completed! Check recommendations.</span>';
+                clearInterval(pollInterval);
+                currentJobId = null;
+                buttons.forEach(btn => btn.disabled = false);
+            } else if (data.status === 'failed') {
+                statusDiv.innerHTML = `<span class="status-error">✗ Failed: ${data.error_message || 'Unknown error'}</span>`;
+                clearInterval(pollInterval);
+                currentJobId = null;
+                buttons.forEach(btn => btn.disabled = false);
+            } else {
+                statusDiv.innerHTML = `<span class="status-running">Running ${data.mode || ''}...</span>`;
+            }
+        } catch (error) {
+            console.error('Status check failed:', error);
+        }
+    }
+
+    // Check on page load if something is running
+    fetch('/api/orchestrator/current')
+        .then(r => r.json())
+        .then(data => {
+            if (data.running) {
+                currentJobId = data.job_id;
+                document.getElementById('run-status').innerHTML = '<span class="status-running">Run in progress...</span>';
+                document.querySelectorAll('.btn-run').forEach(btn => btn.disabled = true);
+                pollInterval = setInterval(checkStatus, 3000);
+            }
+        })
+        .catch(() => { });
+</script>
+{% else %}
+<section class="card">
+    <h2>Run Trading System</h2>
+    <p>Login to trigger trading system runs.</p>
+</section>
+{% endif %}
+
 <section class="card">
     <h2>Quick Links</h2>
     <div class="quick-links">
         <a href="/portfolio" class="btn">Full Portfolio</a>
         <a href="/recommendations" class="btn">Recommendations</a>
+        <a href="/chat" class="btn">Ask Trade Advisor</a>
     </div>
 </section>
 {% endblock %}

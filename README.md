@@ -24,6 +24,8 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 ## Features
  
+ - **Web Dashboard**: Server-rendered UI with GitHub OAuth, portfolio views, and orchestrator controls
+ - **Chat Interface**: Conversational trade advisor for natural language questions
  - **Rest API**: High-performance FastAPI backend with secure API Key authentication
  - **Cloud Database**: Turso (libSQL) integration for cross-device data access
  - **Dynamic Stock Discovery**: Automatic screening via Alpaca/Alpha Vantage + **LLM Re-ranking**
@@ -380,6 +382,53 @@ Drop CSV files into `inbox/` folder and they'll be imported automatically.
  ```bash
  curl -H "X-API-Key: your-secure-key" http://localhost:8000/portfolio/summary
  ```
+
+---
+
+## Web Dashboard
+
+The system includes a server-rendered web dashboard with GitHub OAuth authentication.
+
+### Start the Dashboard
+
+```bash
+# Set required environment variables
+export SESSION_SECRET="your-session-secret"
+export GITHUB_CLIENT_ID="your-github-client-id"
+export GITHUB_CLIENT_SECRET="your-github-client-secret"
+export GITHUB_ALLOWED_USERS="username1,username2"
+
+# Start the server
+uvicorn src.api.main:app --reload --port 8000
+```
+
+Then visit: http://localhost:8000/
+
+### Dashboard Pages
+
+| Page | URL | Description |
+|------|-----|-------------|
+| Home | `/` | Portfolio summary + orchestrator controls |
+| Portfolio | `/portfolio` | Full holdings view |
+| Recommendations | `/recommendations` | Trade recommendations with filters |
+| Chat | `/chat` | Trade advisor chat interface |
+
+### Chat Interface
+
+The `/chat` page provides a conversational interface to the Trade Advisor:
+
+- Ask questions like "Should I buy AAPL?" or "What's your view on MSFT?"
+- Responses include recommendation, confidence level, and reasoning
+- Requires GitHub login
+
+### On-Demand Orchestrator Runs
+
+From the dashboard home page, logged-in users can trigger:
+- **Premarket Scan** - Run before market opens
+- **Market Analysis** - Run during market hours
+- **Postmarket Summary** - Run after market closes
+
+Status updates poll automatically until completion.
  
  ---
  
@@ -568,8 +617,18 @@ Drop CSV files into `inbox/` folder and they'll be imported automatically.
  │   │   └── notification_specialist.py
  │   ├── api/                  # REST API
  │   │   ├── routers/          # API Endpoints
+ │   │   │   ├── agent.py
+ │   │   │   ├── auth.py
+ │   │   │   ├── market.py
+ │   │   │   ├── orchestrator.py  # On-demand runs API
+ │   │   │   └── portfolio.py
+ │   │   ├── auth.py           # GitHub OAuth
  │   │   ├── dependencies.py
  │   │   └── main.py
+ │   ├── dashboard/            # Web Dashboard
+ │   │   ├── routes.py         # Dashboard routes
+ │   │   ├── static/css/       # Stylesheets
+ │   │   └── templates/        # Jinja2 HTML templates
  │   ├── data/
  │   │   ├── cache_manager.py
  │   │   └── db_connection.py  # Turso/SQLite adapter

@@ -299,3 +299,227 @@ footer {
 .sortable-header:hover .sort-icon {
     color: #333;
 }
+
+/* Run buttons */
+.run-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.btn-run {
+    padding: 0.75rem 1.5rem;
+    background: #1a1a2e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.btn-run:hover {
+    background: #2d2d4a;
+}
+
+.btn-run:disabled {
+    background: #999;
+    cursor: not-allowed;
+}
+
+/* Run status */
+.run-status {
+    margin-bottom: 1rem;
+    min-height: 24px;
+}
+
+.status-pending {
+    color: #666;
+}
+
+.status-running {
+    color: #1565c0;
+}
+
+.status-completed {
+    color: #2e7d32;
+}
+
+.status-error {
+    color: #c62828;
+}
+
+/* Chat Interface */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 70vh;
+    max-height: 600px;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.message {
+    margin-bottom: 1rem;
+    max-width: 80%;
+}
+
+.message.user {
+    margin-left: auto;
+}
+
+.message.assistant {
+    margin-right: auto;
+}
+
+.message.error {
+    margin-right: auto;
+    color: #c62828;
+}
+
+.message-content {
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    line-height: 1.5;
+}
+
+.message.user .message-content {
+    background: #1a1a2e;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message.assistant .message-content {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-bottom-left-radius: 4px;
+}
+
+.message.error .message-content {
+    background: #ffebee;
+    border: 1px solid #ffcdd2;
+}
+
+/* Chat input form */
+.chat-input-form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.chat-input-form input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.chat-input-form input:focus {
+    outline: none;
+    border-color: #1a1a2e;
+}
+
+.chat-input-form button {
+    padding: 0.75rem 1.5rem;
+    background: #1a1a2e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.chat-input-form button:hover {
+    background: #2d2d4a;
+}
+
+.chat-input-form button:disabled {
+    background: #999;
+    cursor: not-allowed;
+}
+
+/* Recommendation styling in chat */
+.recommendation-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-badge.proceed {
+    background: #c8e6c9;
+    color: #2e7d32;
+}
+
+.recommendation-badge.caution {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.recommendation-badge.avoid {
+    background: #ffcdd2;
+    color: #c62828;
+}
+
+.recommendation-badge.more_info_needed {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.confidence-bar {
+    margin: 0.5rem 0;
+}
+
+.confidence-bar .bar {
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+}
+
+.confidence-bar .fill {
+    height: 100%;
+    border-radius: 4px;
+}
+
+.confidence-bar .fill.high {
+    background: #4CAF50;
+}
+
+.confidence-bar .fill.medium {
+    background: #ff9800;
+}
+
+.confidence-bar .fill.low {
+    background: #f44336;
+}
+
+.symbol-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: #1a1a2e;
+    color: white;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    margin: 0.5rem 0;
+}
+
+.analysis-points {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+}
+
+.analysis-points li {
+    margin-bottom: 0.25rem;
+}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Trading System{% endblock %}
+
+{% block content %}
+<h1>Trade Advisor Chat</h1>
+
+{% if user %}
+<section class="card chat-container">
+    <div id="chat-messages" class="chat-messages">
+        <div class="message assistant">
+            <div class="message-content">
+                Hello! I'm your trade advisor. Ask me about any stock or trading decision.
+                <br><br>
+                Examples:
+                <ul>
+                    <li>"Should I buy AAPL at current price?"</li>
+                    <li>"What's your view on MSFT?"</li>
+                    <li>"Should I sell my ORCL position?"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <form id="chat-form" class="chat-input-form">
+        <input type="text" id="chat-input" placeholder="Ask about a trade..." autocomplete="off" required>
+        <button type="submit" id="send-btn">Send</button>
+    </form>
+</section>
+
+<script>
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const question = chatInput.value.trim();
+        if (!question) return;
+
+        // Add user message
+        addMessage(question, 'user');
+        chatInput.value = '';
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Thinking...';
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ question })
+            });
+
+            const data = await response.json();
+
+            // Check both error formats: our custom { error } and FastAPI's { detail }
+            const errorMsg = data.error || data.detail;
+            if (!response.ok || errorMsg) {
+                addMessage(`Error: ${errorMsg || 'Request failed'}`, 'error');
+            } else {
+                addAdvisorResponse(data);
+            }
+        } catch (error) {
+            addMessage(`Error: ${error.message}`, 'error');
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send';
+        }
+    });
+
+    function addMessage(content, type) {
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        // Use textContent to prevent XSS
+        contentDiv.textContent = content;
+        div.appendChild(contentDiv);
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addAdvisorResponse(data) {
+        const confidencePercent = Math.round((data.confidence || 0) * 100);
+        const confidenceClass = confidencePercent >= 70 ? 'high' : confidencePercent >= 50 ? 'medium' : 'low';
+
+        // Build DOM safely to prevent XSS
+        const div = document.createElement('div');
+        div.className = 'message assistant';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+
+        // Recommendation badge
+        const badge = document.createElement('div');
+        badge.className = `recommendation-badge ${(data.recommendation || 'unknown').toLowerCase()}`;
+        badge.textContent = data.recommendation || 'ANALYSIS';
+        contentDiv.appendChild(badge);
+
+        // Confidence bar
+        const confBar = document.createElement('div');
+        confBar.className = 'confidence-bar';
+        const confLabel = document.createElement('span');
+        confLabel.textContent = `Confidence: ${confidencePercent}%`;
+        confBar.appendChild(confLabel);
+        const barOuter = document.createElement('div');
+        barOuter.className = 'bar';
+        const barFill = document.createElement('div');
+        barFill.className = `fill ${confidenceClass}`;
+        barFill.style.width = `${confidencePercent}%`;
+        barOuter.appendChild(barFill);
+        confBar.appendChild(barOuter);
+        contentDiv.appendChild(confBar);
+
+        // Symbol tag
+        if (data.symbol) {
+            const symbolTag = document.createElement('div');
+            symbolTag.className = 'symbol-tag';
+            symbolTag.textContent = `${data.symbol} - ${data.action || 'ANALYSIS'}`;
+            contentDiv.appendChild(symbolTag);
+        }
+
+        // Reasoning
+        if (data.reasoning) {
+            const reasoning = document.createElement('p');
+            reasoning.className = 'reasoning';
+            reasoning.textContent = data.reasoning;
+            contentDiv.appendChild(reasoning);
+        }
+
+        // Analysis points
+        if (data.analysis && data.analysis.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'analysis-points';
+            data.analysis.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = point;
+                ul.appendChild(li);
+            });
+            contentDiv.appendChild(ul);
+        }
+
+        div.appendChild(contentDiv);
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+</script>
+{% else %}
+<section class="card">
+    <h2>Trade Advisor Chat</h2>
+    <p>Please <a href="/auth/login">login with GitHub</a> to chat with the trade advisor.</p>
+</section>
+{% endif %}
+{% endblock %}
