@@ -225,3 +225,19 @@ async def get_current(request: Request):
         return JSONResponse({"error": e.detail}, status_code=e.status_code)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/orchestrator/recommended-mode")
+async def get_recommended_mode(request: Request):
+    """Get recommended mode based on current market time."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        result = await orch_module.get_recommended_mode_endpoint(_="direct")
+        return JSONResponse(result)
+    except HTTPException as e:
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)

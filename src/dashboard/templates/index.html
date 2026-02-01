@@ -61,15 +61,17 @@
 {% if user %}
 <section class="card">
     <h2>Run Trading System</h2>
+    <div id="mode-recommendation" class="mode-recommendation"></div>
     <div id="run-status" class="run-status"></div>
+    <div id="run-logs" class="run-logs" style="display: none;"></div>
     <div class="run-buttons">
-        <button class="btn btn-run" onclick="triggerRun('premarket')">
+        <button class="btn btn-run" data-mode="premarket" onclick="triggerRun('premarket')">
             Run Premarket Scan
         </button>
-        <button class="btn btn-run" onclick="triggerRun('market')">
+        <button class="btn btn-run" data-mode="market" onclick="triggerRun('market')">
             Run Market Analysis
         </button>
-        <button class="btn btn-run" onclick="triggerRun('postmarket')">
+        <button class="btn btn-run" data-mode="postmarket" onclick="triggerRun('postmarket')">
             Run Postmarket Summary
         </button>
     </div>
@@ -78,13 +80,53 @@
 <script>
     let currentJobId = null;
     let pollInterval = null;
+    let recommendedMode = null;
+
+    // Fetch recommended mode on page load
+    async function loadRecommendation() {
+        try {
+            const resp = await fetch('/api/orchestrator/recommended-mode');
+            const data = await resp.json();
+            const recDiv = document.getElementById('mode-recommendation');
+
+            if (data.error || data.detail) return;
+
+            recommendedMode = data.recommended;
+
+            if (!data.allow_run) {
+                recDiv.innerHTML = `<span class="rec-closed">⚠️ ${data.reason}</span>`;
+                document.querySelectorAll('.btn-run').forEach(btn => btn.disabled = true);
+            } else if (data.recommended) {
+                recDiv.innerHTML = `<span class="rec-suggestion">💡 Suggested: <strong>${data.recommended}</strong> (${data.reason})</span>`;
+                // Highlight recommended button
+                document.querySelectorAll('.btn-run').forEach(btn => {
+                    if (btn.dataset.mode === data.recommended) {
+                        btn.classList.add('btn-recommended');
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load recommendation:', e);
+        }
+    }
 
     async function triggerRun(mode) {
+        // Confirmation for non-recommended mode
+        if (recommendedMode && mode !== recommendedMode) {
+            const confirm = window.confirm(
+                `The recommended mode right now is "${recommendedMode}".\n\nAre you sure you want to run "${mode}" instead?`
+            );
+            if (!confirm) return;
+        }
+
         const statusDiv = document.getElementById('run-status');
+        const logsDiv = document.getElementById('run-logs');
         const buttons = document.querySelectorAll('.btn-run');
 
         buttons.forEach(btn => btn.disabled = true);
         statusDiv.innerHTML = '<span class="status-pending">Starting...</span>';
+        logsDiv.style.display = 'block';
+        logsDiv.textContent = '';
 
         try {
             const response = await fetch('/api/orchestrator/run', {
@@ -95,23 +137,24 @@
 
             const data = await response.json();
 
-            // Check both error formats: our custom { error } and FastAPI's { detail }
             const errorMsg = data.error || data.detail;
             if (!response.ok || errorMsg) {
                 statusDiv.innerHTML = `<span class="status-error">Error: ${errorMsg || 'Request failed'}</span>`;
                 buttons.forEach(btn => btn.disabled = false);
+                logsDiv.style.display = 'none';
                 return;
             }
 
             currentJobId = data.job_id;
             statusDiv.innerHTML = `<span class="status-running">Running ${mode}...</span>`;
 
-            // Poll for status
-            pollInterval = setInterval(checkStatus, 3000);
+            // Poll for status every 2 seconds
+            pollInterval = setInterval(checkStatus, 2000);
 
         } catch (error) {
             statusDiv.innerHTML = `<span class="status-error">Error: ${error.message}</span>`;
             buttons.forEach(btn => btn.disabled = false);
+            logsDiv.style.display = 'none';
         }
     }
 
@@ -123,9 +166,9 @@
             const data = await response.json();
 
             const statusDiv = document.getElementById('run-status');
+            const logsDiv = document.getElementById('run-logs');
             const buttons = document.querySelectorAll('.btn-run');
 
-            // Check for error responses (401, 404, etc.)
             const errorMsg = data.error || data.detail;
             if (!response.ok || errorMsg) {
                 statusDiv.innerHTML = `<span class="status-error">Error: ${errorMsg || 'Status check failed'}</span>`;
@@ -133,6 +176,12 @@
                 currentJobId = null;
                 buttons.forEach(btn => btn.disabled = false);
                 return;
+            }
+
+            // Update logs
+            if (data.logs) {
+                logsDiv.textContent = data.logs;
+                logsDiv.scrollTop = logsDiv.scrollHeight;
             }
 
             if (data.status === 'completed') {
@@ -153,6 +202,9 @@
         }
     }
 
+    // Load recommendation on page load
+    loadRecommendation();
+
     // Check on page load if something is running
     fetch('/api/orchestrator/current')
         .then(r => r.json())
@@ -160,8 +212,9 @@
             if (data.running) {
                 currentJobId = data.job_id;
                 document.getElementById('run-status').innerHTML = '<span class="status-running">Run in progress...</span>';
+                document.getElementById('run-logs').style.display = 'block';
                 document.querySelectorAll('.btn-run').forEach(btn => btn.disabled = true);
-                pollInterval = setInterval(checkStatus, 3000);
+                pollInterval = setInterval(checkStatus, 2000);
             }
         })
         .catch(() => { });

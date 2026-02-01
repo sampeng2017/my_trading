@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS orchestrator_runs (
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
     error_message TEXT,
-    triggered_by TEXT DEFAULT 'manual' CHECK(triggered_by IN ('manual', 'scheduled'))
+    triggered_by TEXT DEFAULT 'manual' CHECK(triggered_by IN ('manual', 'scheduled')),
+    logs TEXT DEFAULT ''
 );
 
 -- Indexes for performance

@@ -523,3 +523,52 @@ footer {
 .analysis-points li {
     margin-bottom: 0.25rem;
 }
+
+/* Run Logs Display */
+.run-logs {
+    background: #1a1a2e;
+    color: #e8e8e8;
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.85rem;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+/* Mode Recommendation */
+.mode-recommendation {
+    margin-bottom: 1rem;
+}
+
+.rec-suggestion {
+    color: #2e7d32;
+    font-size: 0.95rem;
+}
+
+.rec-closed {
+    color: #d32f2f;
+    font-weight: 500;
+}
+
+/* Recommended Button Highlight */
+.btn-recommended {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+    box-shadow: 0 0 12px rgba(76, 175, 80, 0.5);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 16px rgba(76, 175, 80, 0.7);
+    }
+}

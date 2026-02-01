@@ -4,6 +4,7 @@ Orchestrator API - trigger and monitor trading system runs.
 import os
 import threading
 from datetime import datetime
+import pytz
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
@@ -40,6 +41,80 @@ def _get_running_job_id() -> int | None:
     return row[0] if row else None
 
 
+def _append_log(job_id: int, message: str):
+    """Append a log message to the job's log."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_line = f"[{timestamp}] {message}\n"
+    with get_connection(_get_db_path()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE orchestrator_runs SET logs = COALESCE(logs, '') || ? WHERE id = ?",
+            (log_line, job_id)
+        )
+        conn.commit()
+
+
+def get_recommended_mode() -> dict:
+    """Get recommended mode based on current market time (Pacific Time)."""
+    try:
+        import pandas_market_calendars as mcal
+        market_calendar = True
+    except ImportError:
+        market_calendar = False
+    
+    pacific = pytz.timezone('America/Los_Angeles')
+    now = datetime.now(pacific)
+    current_time = now.time()
+    today = now.date()
+    
+    # Check if market is open today
+    market_open = True
+    if market_calendar:
+        nyse = mcal.get_calendar('NYSE')
+        schedule = nyse.schedule(start_date=today, end_date=today)
+        market_open = len(schedule) > 0
+    else:
+        market_open = today.weekday() < 5  # Weekday check
+    
+    if not market_open:
+        return {
+            "recommended": None,
+            "reason": "Market closed today (weekend or holiday)",
+            "allow_run": False
+        }
+    
+    # Market hours: 6:30 AM - 1:00 PM Pacific
+    from datetime import time
+    premarket_end = time(6, 30)
+    market_close = time(13, 0)
+    postmarket_end = time(21, 0)
+    
+    if current_time < premarket_end:
+        return {
+            "recommended": "premarket",
+            "reason": f"Before market open ({now.strftime('%I:%M %p')} PT)",
+            "allow_run": True
+        }
+    elif current_time < market_close:
+        return {
+            "recommended": "market",
+            "reason": f"Market hours ({now.strftime('%I:%M %p')} PT)",
+            "allow_run": True
+        }
+    elif current_time < postmarket_end:
+        return {
+            "recommended": "postmarket",
+            "reason": f"After market close ({now.strftime('%I:%M %p')} PT)",
+            "allow_run": True
+        }
+    else:
+        return {
+            "recommended": "postmarket",
+            "reason": f"Evening ({now.strftime('%I:%M %p')} PT) - postmarket if not done",
+            "allow_run": True
+        }
+
+
 def _run_orchestrator(job_id: int, mode: str):
     """Background task to run the orchestrator."""
     import sys
@@ -53,6 +128,8 @@ def _run_orchestrator(job_id: int, mode: str):
     from src.main_orchestrator import TradingOrchestrator
 
     try:
+        _append_log(job_id, f"Starting {mode} run...")
+        
         # Update status to running
         with get_connection(_get_db_path()) as conn:
             cursor = conn.cursor()
@@ -61,10 +138,16 @@ def _run_orchestrator(job_id: int, mode: str):
                 (datetime.now().isoformat(), job_id)
             )
             conn.commit()
+        
+        _append_log(job_id, "Initializing orchestrator...")
 
         # Run orchestrator
         orchestrator = TradingOrchestrator()
+        
+        _append_log(job_id, "Running orchestrator pipeline...")
         orchestrator.run(mode=mode)
+        
+        _append_log(job_id, "✓ Run completed successfully!")
 
         # Update status to completed
         with get_connection(_get_db_path()) as conn:
@@ -76,6 +159,7 @@ def _run_orchestrator(job_id: int, mode: str):
             conn.commit()
 
     except Exception as e:
+        _append_log(job_id, f"✗ Error: {str(e)}")
         # Update status to failed
         with get_connection(_get_db_path()) as conn:
             cursor = conn.cursor()
@@ -144,11 +228,11 @@ async def run_orchestrator(request: RunRequest, _: str = Depends(verify_api_key)
 
 @router.get("/status/{job_id}")
 async def get_run_status(job_id: int, _: str = Depends(verify_api_key)):
-    """Get status of an orchestrator run."""
+    """Get status of an orchestrator run including logs."""
     with get_connection(_get_db_path()) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, mode, status, started_at, completed_at, error_message FROM orchestrator_runs WHERE id = ?",
+            "SELECT id, mode, status, started_at, completed_at, error_message, logs FROM orchestrator_runs WHERE id = ?",
             (job_id,)
         )
         row = cursor.fetchone()
@@ -162,7 +246,8 @@ async def get_run_status(job_id: int, _: str = Depends(verify_api_key)):
         "status": row[2],
         "started_at": row[3],
         "completed_at": row[4],
-        "error_message": row[5]
+        "error_message": row[5],
+        "logs": row[6] or ""
     }
 
 
@@ -201,3 +286,9 @@ async def get_current_run(_: str = Depends(verify_api_key)):
     if job_id:
         return {"running": True, "job_id": job_id}
     return {"running": False, "job_id": None}
+
+
+@router.get("/recommended-mode")
+async def get_recommended_mode_endpoint(_: str = Depends(verify_api_key)):
+    """Get recommended mode based on current market time."""
+    return get_recommended_mode()
