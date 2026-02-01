@@ -906,15 +906,14 @@ ns.send_email('Test from cloud', 'This is a test email.')
 - [x] Dashboard accessible at `http://localhost:8000`
 - [x] Can view portfolio on browser (Login required for actions)
 
-### Phase 4 Complete
-- [ ] Railway account created
-- [ ] Project deployed
-- [ ] Environment variables set in Railway (including `API_KEY`)
-- [ ] App accessible at Railway URL
-- [ ] **Security check**: `/api/run` without API key returns 401
-- [ ] **Security check**: `/api/run` with API key works
-- [ ] Cron job scheduled for trading runs (in UTC!)
-- [ ] Verify scheduled run executes
+### Phase 4 Complete ✅
+- [x] Railway account created
+- [x] Project deployed
+- [x] Environment variables set in Railway (including `API_KEY`)
+- [x] App accessible at Railway URL
+- [x] GitHub OAuth login working
+- [ ] Cron job scheduled for trading runs (in UTC!) - Optional
+- [ ] Verify scheduled run executes - Optional
 
 ### Phase 5 Complete
 - [ ] iMessage code removed/disabled

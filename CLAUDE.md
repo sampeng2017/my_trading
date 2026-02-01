@@ -109,12 +109,14 @@ TURSO_AUTH_TOKEN=your-token          # Required if DB_MODE=turso
 # REST API & Dashboard
 API_KEY=your-secure-key              # Required for API access
 SESSION_SECRET=your-secret           # Required for dashboard sessions
-GITHUB_CLIENT_ID=your-client-id      # Required for dashboard login
+GITHUB_CLIENT_ID=your-client-id      # Required for dashboard login (local OAuth app)
 GITHUB_CLIENT_SECRET=your-secret     # Required for dashboard login
 GITHUB_ALLOWED_USERS=your-username   # Comma-separated GitHub usernames
 ```
 
 The `.env` file is loaded automatically by python-dotenv.
+
+**Note:** Use separate GitHub OAuth apps for local (callback: `http://localhost:8000/auth/callback`) and production (callback: `https://your-app.up.railway.app/auth/callback`).
 
 ## Configuration
 
@@ -174,9 +176,16 @@ All agents use `get_connection()` context manager for database access.
 - `GET /auth/login` - Login with GitHub
 - `GET /auth/logout` - Logout
 
-Start server: `uvicorn src.api.main:app --port 8000`
-- API docs: http://localhost:8000/docs
+**Local development:**
+```bash
+uvicorn src.api.main:app --port 8000
+```
 - Dashboard: http://localhost:8000/
+- API docs: http://localhost:8000/docs
+
+**Production (Railway):**
+- Dashboard: https://web-production-7bb53.up.railway.app/
+- Auto-deploys on push to `main` branch
 
 ## Workflow
 
