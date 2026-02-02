@@ -137,7 +137,9 @@ class TradeAdvisor:
         exclude_words = {'I', 'A', 'IF', 'OF', 'AT', 'THE', 'MY', 'DO', 'IS', 'IT', 
                         'TO', 'OR', 'AN', 'BE', 'IN', 'ON', 'FOR', 'AND', 'YOU', 
                         'WHAT', 'SHOULD', 'THINK', 'SELL', 'BUY', 'HOLD', 'GOOD',
-                        'TIME', 'NOW', 'MORE', 'SOME', 'ALL', 'SHARE', 'SHARES'}
+
+                        'TIME', 'NOW', 'MORE', 'SOME', 'ALL', 'SHARE', 'SHARES',
+                        'PRICE', 'TODAY', 'WEEK', 'YEAR', 'MONTH', 'DAY', 'DATE'}
         
         # Find all potential symbols and pick the first valid one
         all_matches = re.findall(r'\b([A-Z]{1,5}(?:[.\-][A-Z]{1,2})?)\b', question_upper)
@@ -145,14 +147,15 @@ class TradeAdvisor:
             if match not in exclude_words and len(match) >= 2:
                 intent['symbol'] = match
                 break
-        
-        # Extract action
+        # Extract action first (so we know if it's missing)
         if any(word in question_upper for word in ['SELL', 'SELLING', 'SOLD']):
             intent['action'] = 'SELL'
         elif any(word in question_upper for word in ['BUY', 'BUYING', 'BOUGHT', 'PURCHASE']):
             intent['action'] = 'BUY'
         elif any(word in question_upper for word in ['HOLD', 'KEEP', 'HOLDING']):
             intent['action'] = 'HOLD'
+
+
         
         # Extract quantity - must be followed by 'share(s)' to avoid grabbing prices
         qty_match = re.search(r'(\d+)\s+shares?', question, re.IGNORECASE)
@@ -168,8 +171,77 @@ class TradeAdvisor:
             if price_str:
                 intent['price'] = float(price_str)
         
+        
+        # Fallback/Enhancement: If no symbol found via regex, OR if we want AI refinement for missing fields
+        # Trigger if:
+        # 1. No symbol found
+        # 2. Symbol found but no Action (AI can infer "dump" = "sell")
+        # 3. Only if AI model is available
+        # NOTE: We do NOT trigger for missing Quantity/Price to save latency, as they are optional.
+        missing_critical = not intent['symbol'] or not intent['action']
+        
+        if missing_critical and self.gemini_model:
+            ai_intent = self._resolve_intent_with_ai(question)
+            
+            # Merge AI intent into regex intent (AI fills gaps)
+            if ai_intent.get('symbol'):
+                intent['symbol'] = ai_intent['symbol']
+            if not intent['action'] and ai_intent.get('action'):
+                intent['action'] = ai_intent['action']
+            # Only override quantity/price if regex didn't find them and they are in AI result
+            if not intent['quantity'] and ai_intent.get('quantity'):
+                intent['quantity'] = ai_intent['quantity']
+            if not intent['price'] and ai_intent.get('price'):
+                intent['price'] = ai_intent['price']
+
         logger.debug(f"Extracted intent: {intent}")
         return intent
+
+    def _resolve_intent_with_ai(self, question: str) -> Dict:
+        """Use Gemini to extract full intent (Symbol, Action, Qty, Price) from text."""
+        try:
+            prompt = f"""Analyze this trading question and extract the intent.
+            Question: "{question}"
+            
+            Return ONLY a valid JSON object with these keys:
+            - symbol: Stock ticker (e.g., AAPL) or null
+            - action: BUY, SELL, HOLD, or null
+            - quantity: Number of shares (integer) or null
+            - price: Price target (float) or null
+            
+            Example: {{"symbol": "GOOG", "action": "BUY", "quantity": 10, "price": 150.0}}"""
+            
+            response = self.gemini_model.generate_content(prompt)
+            if response and response.text:
+                # Use plain JSON parsing instead of _parse_response (which expects complex structure)
+                text = response.text.strip()
+                # Strip markdown code blocks if present
+                if text.startswith('```'):
+                    text = text.strip('`').strip()
+                    if text.startswith('json'):
+                        text = text[4:].strip()
+                
+                try:
+                    result = json.loads(text)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse AI intent JSON: {text[:100]}")
+                    return {}
+                
+                # Validate symbol
+                if result.get('symbol'):
+                    sym = result['symbol'].upper()
+                    # Basic validation: 1-5 letters
+                    if re.match(r'^[A-Z]{1,5}$', sym) and sym != 'NONE':
+                        result['symbol'] = sym
+                    else:
+                        result['symbol'] = None
+                
+                logger.info(f"AI resolved intent: {result}")
+                return result
+        except Exception as e:
+            logger.warning(f"Failed to resolve intent with AI: {e}")
+        
+        return {}
 
     def _gather_context(self, symbol: str) -> Dict:
         """Gather all relevant context for a specific symbol."""
