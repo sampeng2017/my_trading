@@ -306,6 +306,13 @@ class TradingOrchestrator:
             except Exception as e:
                 logger.warning(f"Stock screener error: {e}")
 
+        # Filter out skip_list symbols (junk stocks, unsellable positions)
+        skip_list = set(self.config.get('skip_list', []))
+        if skip_list:
+            symbols = symbols - skip_list
+            if skip_list:
+                logger.info(f"Filtered out {len(skip_list)} skip_list symbols: {', '.join(skip_list)}")
+
         return list(symbols)
     
     def run_portfolio_review(self):

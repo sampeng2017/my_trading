@@ -44,6 +44,10 @@ paths:
 # Watchlist (symbols to monitor)
 watchlist: []
 
+# Skip List (symbols to always ignore - e.g., junk stocks, unsellable positions)
+skip_list: ["NSAV"]
+
+
 # AI Configuration
 ai:
   model_strategy: "gemini-2.5-flash"     # Main model for trade analysis
