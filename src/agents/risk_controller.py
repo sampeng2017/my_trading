@@ -93,15 +93,22 @@ class RiskController:
     
     def _validate_buy(self, symbol: str, rec: Dict, context: Dict) -> Dict:
         """Validate a BUY recommendation."""
-        
+
         price = context.get('price', 0)
         atr = context.get('atr', 0)
-        equity = context.get('portfolio_equity', 10000)
-        cash = context.get('cash_balance', 0)
+        equity = context.get('portfolio_equity')
+        cash = context.get('cash_balance')
         current_position_value = context.get('current_position_value', 0)
         sector = context.get('sector', 'Unknown')
         sector_exposure = context.get('sector_exposure', 0)
-        
+
+        # Fail if no portfolio snapshot exists
+        if equity is None or cash is None:
+            return {
+                'approved': False,
+                'reason': 'No portfolio snapshot found. Import portfolio CSV first.'
+            }
+
         # Sanity check
         if price <= 0:
             return {
@@ -309,8 +316,8 @@ class RiskController:
             'price': market[0] if market else 0,
             'atr': market[1] if market else 0,
             'avg_volume': market[2] if market and len(market) > 2 else 0,
-            'portfolio_equity': portfolio[0] if portfolio else 10000,
-            'cash_balance': portfolio[1] if portfolio else 10000,
+            'portfolio_equity': portfolio[0] if portfolio else None,  # Fail explicitly if no snapshot
+            'cash_balance': portfolio[1] if portfolio else None,
             'current_quantity': position[0] if position else 0,
             'current_position_value': position[1] if position else 0,
             'sector': sector,
@@ -353,11 +360,19 @@ class RiskController:
             Dict with shares, cost, stop_loss, risk
         """
         context = self._get_risk_context(symbol)
-        
-        equity = context.get('portfolio_equity', 10000)
-        cash = context.get('cash_balance', 10000)
+
+        equity = context.get('portfolio_equity')
+        cash = context.get('cash_balance')
         atr = context.get('atr', 0)
-        
+
+        # Fail if no portfolio snapshot exists
+        if equity is None or cash is None:
+            return {
+                'error': 'No portfolio snapshot found. Import portfolio CSV first.',
+                'shares': 0,
+                'cost': 0
+            }
+
         # Risk amount
         risk_amount = equity * self.RISK_PER_TRADE_PCT
         
