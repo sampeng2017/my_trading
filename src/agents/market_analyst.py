@@ -127,10 +127,10 @@ class MarketAnalyst:
         if len(df) >= 50:
             sma_50 = float(df['Close'].rolling(50).mean().iloc[-1])
         
-        # Detect high volatility (ATR > 5% of price in recent period)
+        # Detect high volatility (ATR > 8% of price - relaxed from 5% to reduce false positives)
         is_volatile = False
         if atr and current_price > 0:
-            is_volatile = (atr / current_price) > 0.05
+            is_volatile = (atr / current_price) > 0.08
         
         # Detect price spike (>2x ATR move in recent period)
         if atr and len(df) >= 15:
@@ -168,8 +168,8 @@ class MarketAnalyst:
                 logger.error(f"{context} failed: {e}")
                 return None
 
-    def _fetch_alpaca_data(self, symbol: str, days: int = 60) -> Optional[pd.DataFrame]:
-        """Fetch historical data from Alpaca with timeout protection."""
+    def _fetch_alpaca_data(self, symbol: str, days: int = 90) -> Optional[pd.DataFrame]:
+        """Fetch historical data from Alpaca with timeout protection (90 days for reliable SMA50)."""
         if not self.alpaca_client:
             return None
         
@@ -220,7 +220,7 @@ class MarketAnalyst:
             logger.error(f"Alpaca fetch error for {symbol}: {e}")
             return None
     
-    def _fetch_yfinance_data(self, symbol: str, period: str = "60d") -> Optional[pd.DataFrame]:
+    def _fetch_yfinance_data(self, symbol: str, period: str = "90d") -> Optional[pd.DataFrame]:
         """Fetch historical data from Yahoo Finance with timeout protection."""
         if not YFINANCE_AVAILABLE:
             return None
@@ -407,7 +407,7 @@ class MarketAnalyst:
         if self.alpaca_client:
             df = self._fetch_alpaca_data(symbol, days=60)
         elif YFINANCE_AVAILABLE:
-            df = self._fetch_yfinance_data(symbol, period="60d")
+            df = self._fetch_yfinance_data(symbol, period="90d")
         else:
             return "Unknown"
         

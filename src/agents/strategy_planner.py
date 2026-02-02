@@ -345,18 +345,18 @@ class StrategyPlanner:
 Use the following step-by-step reasoning process:
 
 **Step 1: Technical Analysis**
-Evaluate the price trend. Is it above/below SMA? Is momentum clear?
+Evaluate the price trend. If SMA is available, check if price is above/below. If SMA is missing, focus on recent momentum and volatility. Missing SMA alone should NOT prevent a BUY recommendation.
 
 **Step 2: Sentiment Analysis**
-Review the news. Is there a clear catalyst? What's the consensus?
+Review the news. Is there a clear catalyst? Neutral sentiment with no negative news is acceptable for a BUY.
 
 **Step 3: Portfolio Risk**
-Check position sizing. Is this position overweight? Should you rebalance?
+Check position sizing. Is this position overweight? Small positions relative to portfolio are lower risk.
 
 **Step 4: Final Recommendation**
-Based on the above, what action do you recommend?
+Be decisive. If momentum is positive and there's no negative catalyst, lean towards BUY. Only SKIP if there's a clear reason to avoid (negative news, extreme volatility, or strong bearish signals).
 
-{"**Valid Actions:** BUY (add to position), SELL (reduce/exit), or HOLD (maintain current position)" if position_qty > 0 else "**Valid Actions:** BUY (open new position) or SKIP (not worth buying now)"}
+{"**Valid Actions:** BUY (add to position), SELL (reduce/exit), or HOLD (maintain current position)" if position_qty > 0 else "**Valid Actions:** BUY (open new position) or SKIP (only if clear negative signals)"}
 
 **Output Format (JSON ONLY, no preamble, no markdown code blocks):**
 {{
