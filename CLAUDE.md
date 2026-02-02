@@ -156,6 +156,7 @@ All agents use `get_connection()` context manager for database access.
 - `stock_metadata`: Sector/industry info
 - `screener_results`: Cached screening outputs
 - `screener_runs`: Screening audit trail
+- `orchestrator_runs`: On-demand/scheduled run tracking
 
 ## REST API & Web Dashboard
 

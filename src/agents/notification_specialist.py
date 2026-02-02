@@ -10,6 +10,7 @@ Handles:
 """
 
 import subprocess
+import platform
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -205,6 +206,10 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
         Returns:
             True if sent successfully, False otherwise
         """
+        # Check OS - iMessage only works on macOS
+        if platform.system() != 'Darwin':
+            return False
+
         recipient = self.config.get('imessage', {}).get('recipient')
         
         if not recipient:
