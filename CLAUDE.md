@@ -129,13 +129,14 @@ Key settings:
 - `risk.max_sector_exposure_pct`: 40% max per sector
 - `risk.min_liquidity_volume`: 200k shares minimum average daily volume
 - `schedule.timezone`: Pacific Time default
-- `ai.model_strategy`: gemini-2.5-flash
-- `ai.model_sentiment`: gemini-2.5-flash
+- `ai.model_strategy`: gemini-2.0-flash
+- `ai.model_sentiment`: gemini-2.0-flash
 - `limits.max_news_articles`: 5 articles per symbol
 - `limits.market_data_ttl_seconds`: 300 (5 min cache)
 - `screener.enabled`: true (dynamic stock discovery)
 - `screener.max_screened_symbols`: 10 symbols from screening
 - `screener.use_llm_ranking`: true (AI-powered re-ranking)
+- `skip_list`: symbols to always exclude (e.g., `["NSAV"]` for junk stocks)
 
 ## Database
 

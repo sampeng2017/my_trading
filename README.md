@@ -126,7 +126,7 @@ SQLite database with 12 tables:
  | Market Data | Alpaca API → Yahoo Finance → Alpaca Quotes (fallback chain) |
  | Stock Screening | Alpaca Movers API → Alpha Vantage → **Gemini AI Re-ranking** |
  | News Data | Finnhub API |
- | AI | Google Gemini (gemini-2.5-flash) |
+ | AI | Google Gemini (gemini-2.0-flash) |
  | Notifications | macOS Messages (AppleScript), Gmail SMTP |
  | Scheduling | macOS launchd or Cloud Cron |
  | File Watching | watchdog library |
@@ -260,7 +260,7 @@ screener:
   # LLM Re-ranking (intelligent ranking)
   use_llm_ranking: true          # Enable AI analysis
   llm_candidate_pool: 10         # Stocks to analyze
-  model_screening: "gemini-2.5-flash"
+  model_screening: "gemini-2.0-flash"
 
 # Watchlist (always monitored, in addition to screened stocks)
 watchlist:
