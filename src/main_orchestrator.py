@@ -230,25 +230,43 @@ class TradingOrchestrator:
     
     def run_postmarket(self):
         """Post-market summary routine."""
+        # Safety Check: Ensure we haven't already run postmarket today
+        if self._has_run_today('postmarket'):
+            logger.info("✅ Post-market summary already completed today. Skipping.")
+            return
+
         logger.info("📊 Running post-market summary...")
         
-        # Generate and send daily summary
-        self.notifier.send_daily_summary()
+        # Determine status (default completed unless error)
+        status = 'completed'
+        error = None
         
-        # Log portfolio summary
-        snapshot = self.portfolio.get_latest_snapshot()
-        if snapshot:
-            logger.info(f"Portfolio Equity: ${snapshot['total_equity']:,.2f}")
-            logger.info(f"Cash Balance: ${snapshot['cash_balance']:,.2f}")
-            logger.info(f"Holdings: {len(snapshot['holdings'])}")
-        
-        # Log risk summary
-        risk_summary = self.risk.get_risk_summary()
-        if 'error' not in risk_summary:
-            logger.info(f"Largest Position: {risk_summary.get('largest_position')} "
-                       f"({risk_summary.get('largest_position_pct', 0):.1f}%)")
-        
-        logger.info("✅ Post-market summary complete")
+        try:
+            # Generate and send daily summary
+            self.notifier.send_daily_summary()
+            
+            # Log portfolio summary
+            snapshot = self.portfolio.get_latest_snapshot()
+            if snapshot:
+                logger.info(f"Portfolio Equity: ${snapshot['total_equity']:,.2f}")
+                logger.info(f"Cash Balance: ${snapshot['cash_balance']:,.2f}")
+                logger.info(f"Holdings: {len(snapshot['holdings'])}")
+            
+            # Log risk summary
+            risk_summary = self.risk.get_risk_summary()
+            if 'error' not in risk_summary:
+                logger.info(f"Largest Position: {risk_summary.get('largest_position')} "
+                           f"({risk_summary.get('largest_position_pct', 0):.1f}%)")
+            
+            logger.info("✅ Post-market summary complete")
+            
+        except Exception as e:
+            status = 'failed'
+            error = str(e)
+            logger.error(f"Post-market run failed: {e}")
+            raise e
+        finally:
+            self._log_run('postmarket', status, error)
     
     def _get_monitoring_symbols(self) -> list:
         """Get list of symbols to monitor."""
@@ -307,8 +325,6 @@ class TradingOrchestrator:
         
         if not actionable:
             logger.info("No sell/buy signals for current holdings. All positions look stable.")
-            return
-        
         # Validate through risk controller and send alerts
         approved_trades = []
         for rec in actionable:
@@ -325,6 +341,44 @@ class TradingOrchestrator:
             self.notifier.send_batch_alerts(approved_trades)
         
         logger.info(f"✅ Portfolio review complete. {len(approved_trades)} trade recommendations.")
+
+    def _has_run_today(self, mode: str) -> bool:
+        """Check if a specific mode has already completed successfully today."""
+        from src.data.db_connection import get_connection
+        import sqlite3
+        
+        try:
+            with get_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                # Check for 'completed' runs today for this mode
+                cursor.execute("""
+                    SELECT COUNT(*) FROM orchestrator_runs
+                    WHERE mode = ? 
+                    AND status = 'completed'
+                    AND date(started_at) = date('now', 'localtime')
+                """, (mode,))
+                count = cursor.fetchone()[0]
+                return count > 0
+        except Exception as e:
+            logger.warning(f"Failed to check run status: {e}")
+            return False  # Fail open (run it) if DB check fails
+
+    def _log_run(self, mode: str, status: str, error: str = None):
+        """Log execution status to database."""
+        from src.data.db_connection import get_connection
+        import sqlite3
+        
+        try:
+            with get_connection(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO orchestrator_runs 
+                    (mode, status, started_at, completed_at, error_message, triggered_by)
+                    VALUES (?, ?, datetime('now'), datetime('now'), ?, 'scheduled')
+                """, (mode, status, error))
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to log run: {e}")
 
 
 def main():
