@@ -716,7 +716,6 @@ python-3.11.0
 builder = "nixpacks"
 
 [deploy]
-startCommand = "uvicorn src.api.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/api/status"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"

@@ -482,6 +482,28 @@ Status updates poll automatically until completion.
  
  ---
  
+ ## Deployment on Railway
+ 
+ This project is ready for one-click deployment on Railway, but requires **manual configuration** of the start command because `railway.toml` is unlocked to support multiple services (Web + Cron).
+ 
+ ### 1. Web Service (Dashboard)
+ When you deploy the repo, you **MUST** set the **Custom Start Command** in Railway Settings -> Deploy:
+ 
+ ```bash
+ uvicorn src.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+ ```
+ 
+ ### 2. Cron Jobs (Optional)
+ To run automated premarket/market scans, create a **second service** from the same repo and use:
+ 
+ ```bash
+ python src/main_orchestrator.py --mode auto
+ ```
+ 
+ See [doc/RAILWAY_CRON_SETUP.md](doc/RAILWAY_CRON_SETUP.md) for full cron instructions.
+ 
+ ---
+ 
  ## Maintenance
  
  ### Daily Tasks

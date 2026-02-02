@@ -2,16 +2,24 @@
 
 Since Railway does not support running both a persistent Web Service (your dashboard) and a scheduled Cron Job in the same service instance, you need to set up a dedicated **Cron Service**.
 
-## Step 1: Create a New Service
-1.  Go to your project dashboard on [Railway.app](https://railway.app/).
-2.  Click **+ New** -> **GitHub Repo**.
-3.  Select the **same repository** (`my_trading`) again.
-4.  This will spawn a second service card in your project.
-
-## Step 2: Configure as Cron Job
-1.  Click on the new service card.
+## Step 1: Update Main Web Service
+**Important**: I have removed the default start command from `railway.toml`. You must now set it manually for your **existing Web Service**:
+1.  Go to your **Main Service** (the dashboard/web app).
 2.  Go to **Settings** -> **Deploy**.
-3.  **Critical**: Set the **Start Command** to:
+3.  Set **Start Command** to:
+    ```bash
+    uvicorn src.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    ```
+
+## Step 2: Create a Cron Service
+1.  Click **+ New** -> **GitHub Repo**.
+2.  Select the **same repository** (`my_trading`).
+3.  This spawns a second service card.
+
+## Step 3: Configure Cron Service
+1.  Click the new service card.
+2.  Go to **Settings** -> **Deploy**.
+3.  Set **Start Command** to:
     ```bash
     python src/main_orchestrator.py --mode auto
     ```

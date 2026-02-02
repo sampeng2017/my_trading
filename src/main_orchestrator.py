@@ -132,6 +132,9 @@ class TradingOrchestrator:
         Args:
             mode: Operating mode (auto-detects if not specified)
         """
+        if mode == 'auto':
+            mode = None
+            
         mode = mode or self.get_current_mode()
         now = datetime.now(self.tz)
         
