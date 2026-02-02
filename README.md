@@ -101,7 +101,7 @@ A locally-run, multi-agent AI-powered trading analysis system for macOS. Provide
 
 ### Database Schema
 
-SQLite database with 10 tables:
+SQLite database with 12 tables:
 - `portfolio_snapshot` / `holdings` - Portfolio state
 - `market_data` - Price cache with TTL
 - `news_analysis` - Sentiment results
@@ -112,6 +112,7 @@ SQLite database with 10 tables:
 - `stock_metadata` - Sector/industry info
 - `screener_results` - Cached screening outputs
 - `screener_runs` - Screening audit trail
+- `orchestrator_runs` - On-demand/scheduled run tracking
 
 ---
 

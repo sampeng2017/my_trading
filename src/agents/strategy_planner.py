@@ -464,6 +464,12 @@ Based on the above, what action do you recommend?
     
     def _write_to_db(self, recommendation: Dict):
         """Store recommendation for audit trail."""
+        # Safety check: Database schema constraint only allows specific actions
+        allowed_actions = {'BUY', 'SELL', 'HOLD'}
+        if recommendation['action'] not in allowed_actions:
+            logger.debug(f"Skipping DB write for action '{recommendation['action']}' (not in schema)")
+            return
+
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
