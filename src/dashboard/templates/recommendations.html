@@ -71,7 +71,8 @@
         <tbody>
             {% for r in recommendations %}
             <tr data-timestamp="{{ r.timestamp or '' }}">
-                <td>{{ r.formatted_time or 'N/A' }}</td>
+                <td><span class="local-time" data-timestamp="{{ r.timestamp }}">{{ r.formatted_time or r.timestamp or
+                        'N/A' }}</span></td>
                 <td><strong>{{ r.symbol }}</strong></td>
                 <td class="action-{{ r.action|lower }}">{{ r.action }}</td>
                 <td>{{ "%.0f"|format((r.confidence or 0) * 100) }}%</td>

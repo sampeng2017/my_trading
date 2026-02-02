@@ -19,8 +19,8 @@
         </div>
         <div class="stat">
             <span class="stat-label">Last Updated</span>
-            <span class="stat-value">{{ portfolio.last_updated[:19].replace('T', ' ') if portfolio.last_updated else
-                'N/A' }}</span>
+            <span class="stat-value local-time" data-timestamp="{{ portfolio.last_updated }}">{{
+                portfolio.last_updated[:19] if portfolio.last_updated else 'N/A' }}</span>
         </div>
     </div>
 </section>
