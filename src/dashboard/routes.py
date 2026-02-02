@@ -35,7 +35,7 @@ async def dashboard_home(request: Request):
     user = await get_current_user(request)
     
     if not user:
-        return RedirectResponse(url="/login")
+        return RedirectResponse(url="/auth/login")
 
     error = request.query_params.get('error')
 
@@ -62,7 +62,7 @@ async def portfolio_page(request: Request):
     """Full portfolio view."""
     user = await get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login")
+        return RedirectResponse(url="/auth/login")
 
     portfolio = None
     holdings = []
@@ -86,7 +86,7 @@ async def recommendations_page(request: Request, days: int = 7):
     """Trade recommendations view with date filter and analytics."""
     user = await get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login")
+        return RedirectResponse(url="/auth/login")
 
     recommendations = []
     analytics = {
@@ -146,7 +146,7 @@ async def chat_page(request: Request):
     """Chat interface page."""
     user = await get_current_user(request)
     if not user:
-        return RedirectResponse(url="/login")
+        return RedirectResponse(url="/auth/login")
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "user": user,
