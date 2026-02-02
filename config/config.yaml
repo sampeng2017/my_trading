@@ -50,8 +50,8 @@ skip_list: ["NSAV"]
 
 # AI Configuration
 ai:
-  model_strategy: "gemini-2.5-flash"     # Main model for trade analysis
-  model_sentiment: "gemini-2.5-flash"    # Model for news sentiment
+  model_strategy: "gemini-2.0-flash"     # Main model for trade analysis
+  model_sentiment: "gemini-2.0-flash"    # Model for news sentiment
   temperature: 0.2
   max_tokens: 1000
 
@@ -72,5 +72,5 @@ screener:
   # LLM Re-ranking (intelligent stock selection)
   use_llm_ranking: true            # Enable AI-powered re-ranking
   llm_candidate_pool: 10           # How many to send to LLM for ranking
-  model_screening: "gemini-2.5-flash"  # Gemini 2.5 Flash
+  model_screening: "gemini-2.0-flash"  # Gemini 2.0 Flash
   temperature_screening: 0.2       # Low temp for consistent rankings
