@@ -58,7 +58,21 @@ def get_strategy_planner():
 
 def get_trade_advisor():
     from src.agents.trade_advisor import TradeAdvisor
-    config = get_config().config
+    from src.agents.market_analyst import MarketAnalyst
+    
+    config_obj = get_config()
+    config = config_obj.config
     db_path = get_db_path()
     gemini_key = os.getenv("GEMINI_API_KEY")
-    return TradeAdvisor(db_path, gemini_key, config)
+    
+    # Initialize Market Analyst for on-demand data fetching
+    # Extract config for Market Analyst and pass keys directly if needed
+    ma_config = config_obj.get_agent_config('market_analyst') or {}
+    
+    # Get keys from env (preferred) or config
+    alpaca_key = os.getenv("ALPACA_API_KEY") or ma_config.get('api_key')
+    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or ma_config.get('api_secret')
+    
+    market_analyst = MarketAnalyst(db_path, alpaca_key, alpaca_secret, ma_config)
+    
+    return TradeAdvisor(db_path, gemini_key, config, market_analyst)

@@ -31,7 +31,7 @@ class TradeAdvisor:
     """Agent that answers natural language questions about trades."""
     
     def __init__(self, db_path: str, gemini_key: Optional[str] = None, 
-                 config: Optional[Dict] = None):
+                 config: Optional[Dict] = None, market_analyst: Any = None):
         """
         Initialize Trade Advisor.
         
@@ -39,9 +39,11 @@ class TradeAdvisor:
             db_path: Path to SQLite database
             gemini_key: Google Gemini API key
             config: Configuration dict
+            market_analyst: MarketAnalyst instance for on-demand fetching
         """
         self.db_path = db_path
         self.config = config or {}
+        self.market_analyst = market_analyst
         self.gemini_model = None
         
         # AI configuration
@@ -57,7 +59,7 @@ class TradeAdvisor:
                 logger.info(f"Gemini {self.model_name} initialized for Trade Advisor")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
-    
+
     def ask(self, question: str) -> Dict:
         """
         Answer a natural language question about trades.
@@ -168,7 +170,7 @@ class TradeAdvisor:
         
         logger.debug(f"Extracted intent: {intent}")
         return intent
-    
+
     def _gather_context(self, symbol: str) -> Dict:
         """Gather all relevant context for a specific symbol."""
         context = {
@@ -180,6 +182,33 @@ class TradeAdvisor:
             'portfolio_summary': None
         }
         
+        # Check if we need to fetch live data first
+        if self.market_analyst:
+            try:
+                # Check if we have recent data
+                with get_connection(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT timestamp FROM market_data 
+                        WHERE symbol = ? 
+                        ORDER BY timestamp DESC LIMIT 1
+                    """, (symbol.upper(),))
+                    row = cursor.fetchone()
+                    
+                    need_fetch = True
+                    if row:
+                        last_update = datetime.fromisoformat(row[0])
+                        # If data is less than 24 hours old (or market closed over weekend), use it
+                        # But for chat, users usually want freshness. Let's say 24h cache.
+                        if datetime.now() - last_update < timedelta(hours=24):
+                            need_fetch = False
+                    
+                    if need_fetch:
+                        logger.info(f"Fetching on-demand market data for {symbol}")
+                        self.market_analyst.scan_symbols([symbol])
+            except Exception as e:
+                logger.error(f"Failed to fetch on-demand data: {e}")
+
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
