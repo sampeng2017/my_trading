@@ -278,9 +278,17 @@ System Time: {datetime.now().strftime('%I:%M %p PT')}"""
             smtp_server = email_config.get('smtp_server', 'smtp.gmail.com')
             smtp_port = email_config.get('smtp_port', 465)
             
-            with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
+            # Use appropriate connection method based on port
+            if smtp_port == 587:
+                with smtplib.SMTP(smtp_server, smtp_port) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            else:
+                # Default to SSL for 465
+                with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
             
             self._log_notification('email', subject, 'sent')
             logger.info(f"Email sent: {subject}")

@@ -9,7 +9,7 @@ api_keys:
 # Email Configuration
 email:
   smtp_server: "smtp.gmail.com"
-  smtp_port: 465
+  smtp_port: 587
   username: "${GMAIL_USER}"
   app_password: "${GMAIL_APP_PASSWORD}"
   recipient: "${EMAIL_RECIPIENT}"
