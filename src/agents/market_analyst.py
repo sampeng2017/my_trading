@@ -11,7 +11,8 @@ Handles:
 
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import pytz
 
 import logging
@@ -154,8 +155,21 @@ class MarketAnalyst:
             'timestamp': datetime.now().isoformat()
         }
     
+    def _call_with_timeout(self, func: Callable, timeout: int = 10, context: str = "API call"):
+        """Execute a function with a timeout to prevent hangs."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(func)
+            try:
+                return future.result(timeout=timeout)
+            except FuturesTimeoutError:
+                logger.error(f"{context} timed out after {timeout}s")
+                return None
+            except Exception as e:
+                logger.error(f"{context} failed: {e}")
+                return None
+
     def _fetch_alpaca_data(self, symbol: str, days: int = 60) -> Optional[pd.DataFrame]:
-        """Fetch historical data from Alpaca."""
+        """Fetch historical data from Alpaca with timeout protection."""
         if not self.alpaca_client:
             return None
         
@@ -165,7 +179,13 @@ class MarketAnalyst:
                 timeframe=TimeFrame.Day,
                 start=datetime.now() - timedelta(days=days)
             )
-            bars = self.alpaca_client.get_stock_bars(request)
+            
+            # Wrap the API call with timeout
+            bars = self._call_with_timeout(
+                lambda: self.alpaca_client.get_stock_bars(request),
+                timeout=15,
+                context=f"Alpaca bars fetch for {symbol}"
+            )
             
             if not bars:
                 return None
@@ -201,15 +221,23 @@ class MarketAnalyst:
             return None
     
     def _fetch_yfinance_data(self, symbol: str, period: str = "60d") -> Optional[pd.DataFrame]:
-        """Fetch historical data from Yahoo Finance."""
+        """Fetch historical data from Yahoo Finance with timeout protection."""
         if not YFINANCE_AVAILABLE:
             return None
         
         try:
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period=period)
+            # Wrap yfinance call with timeout
+            def fetch():
+                ticker = yf.Ticker(symbol)
+                return ticker.history(period=period)
             
-            if df.empty:
+            df = self._call_with_timeout(
+                fetch,
+                timeout=15,
+                context=f"yfinance fetch for {symbol}"
+            )
+            
+            if df is None or df.empty:
                 return None
             
             return df
@@ -228,9 +256,15 @@ class MarketAnalyst:
 
         try:
             request = StockLatestQuoteRequest(symbol_or_symbols=[symbol])
-            quote = self.alpaca_client.get_stock_latest_quote(request)
+            
+            # Wrap quote fetch with timeout
+            quote = self._call_with_timeout(
+                lambda: self.alpaca_client.get_stock_latest_quote(request),
+                timeout=10,
+                context=f"Alpaca quote fetch for {symbol}"
+            )
 
-            if symbol not in quote:
+            if not quote or symbol not in quote:
                 return None
 
             q = quote[symbol]
