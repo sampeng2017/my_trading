@@ -213,7 +213,7 @@ Output ONLY the JSON, no other text."""
         
         # Try to extract JSON from markdown code block
         text = response_text.strip()
-        if text.startswith('```'):
+        if '```' in text:
             lines = text.split('\n')
             json_lines = []
             in_json = False
@@ -228,6 +228,15 @@ Output ONLY the JSON, no other text."""
             
             try:
                 return json.loads('\n'.join(json_lines))
+            except json.JSONDecodeError:
+                pass
+
+        # Try to find JSON object in text (Robust fallback)
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start != -1 and end > start:
+            try:
+                return json.loads(text[start:end])
             except json.JSONDecodeError:
                 pass
         
