@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from collections import Counter
 from fastapi import APIRouter, Request, UploadFile, File
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from src.api.auth import get_current_user
 from src.api.dependencies import get_portfolio_accountant, get_strategy_planner, get_trade_advisor
 
@@ -33,6 +33,10 @@ def format_timestamp(iso_timestamp: str) -> str:
 async def dashboard_home(request: Request):
     """Dashboard home page."""
     user = await get_current_user(request)
+    
+    if not user:
+        return RedirectResponse(url="/login")
+
     error = request.query_params.get('error')
 
     portfolio = None
@@ -57,6 +61,8 @@ async def dashboard_home(request: Request):
 async def portfolio_page(request: Request):
     """Full portfolio view."""
     user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
 
     portfolio = None
     holdings = []
@@ -79,6 +85,8 @@ async def portfolio_page(request: Request):
 async def recommendations_page(request: Request, days: int = 7):
     """Trade recommendations view with date filter and analytics."""
     user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
 
     recommendations = []
     analytics = {
@@ -137,6 +145,8 @@ async def recommendations_page(request: Request, days: int = 7):
 async def chat_page(request: Request):
     """Chat interface page."""
     user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login")
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "user": user,

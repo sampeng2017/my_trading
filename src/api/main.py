@@ -28,9 +28,13 @@ if session_secret:
     app.add_middleware(SessionMiddleware, secret_key=session_secret)
 
 # CORS middleware
+# NOTE: allow_origins=['*'] with allow_credentials=True is invalid.
+# We restrict to localhost for dev. In prod, use CORS_ORIGINS env var.
+origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

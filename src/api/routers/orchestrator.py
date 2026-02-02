@@ -26,7 +26,8 @@ class RunResponse(BaseModel):
 
 
 def _get_db_path():
-    return os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', 'agent.db')
+    from src.utils.config import get_db_path
+    return get_db_path()
 
 
 

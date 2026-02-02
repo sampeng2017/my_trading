@@ -29,10 +29,8 @@ async def verify_api_key(x_api_key: Optional[str] = Header(None)):
     return x_api_key
 # Agent Dependencies
 def get_db_path():
-    db_path = os.path.join(os.getcwd(), 'data', 'agent.db')
-    if os.getenv("DB_MODE") == "turso":
-        pass
-    return db_path
+    from src.utils.config import get_db_path as config_get_db_path
+    return config_get_db_path()
 
 def get_config():
     from src.utils.config import Config
