@@ -158,6 +158,11 @@ class TradingOrchestrator:
         """Pre-market analysis routine."""
         logger.info("📅 Running pre-market scan...")
         
+        # Holiday/Weekend Check
+        if not self.market.is_trading_day():
+            logger.info("🛑 Today is a market holiday or weekend. Skipping pre-market scan.")
+            return
+
         # Get symbols to monitor
         symbols = self._get_monitoring_symbols()
         logger.info(f"Monitoring {len(symbols)} symbols: {', '.join(symbols)}")
@@ -189,6 +194,11 @@ class TradingOrchestrator:
         """Active market hours routine."""
         logger.info("📈 Running market hours analysis...")
         
+        # Holiday/Weekend Check
+        if not self.market.is_trading_day():
+            logger.info("🛑 Today is a market holiday or weekend. Skipping market analysis.")
+            return
+
         # Get symbols
         symbols = self._get_monitoring_symbols()
         
@@ -236,6 +246,11 @@ class TradingOrchestrator:
         # Safety Check: Ensure we haven't already run postmarket today
         if self._has_run_today('postmarket'):
             logger.info("✅ Post-market summary already completed today. Skipping.")
+            return
+
+        # Holiday/Weekend Check
+        if not self.market.is_trading_day():
+            logger.info("🛑 Today is a market holiday or weekend. Skipping post-market summary.")
             return
 
         logger.info("📊 Running post-market summary...")

@@ -12,6 +12,7 @@ Handles:
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+import pytz
 
 import logging
 from src.data.db_connection import get_connection
@@ -23,6 +24,8 @@ try:
     from alpaca.data import StockHistoricalDataClient
     from alpaca.data.requests import StockBarsRequest, StockLatestQuoteRequest
     from alpaca.data.timeframe import TimeFrame
+    from alpaca.trading.client import TradingClient
+    from alpaca.trading.requests import GetCalendarRequest
     ALPACA_AVAILABLE = True
 except ImportError:
     ALPACA_AVAILABLE = False
@@ -56,10 +59,12 @@ class MarketAnalyst:
         self.config = config or {}
         
         self.alpaca_client = None
+        self.trading_client = None
         if ALPACA_AVAILABLE and api_key and api_secret:
             try:
                 self.alpaca_client = StockHistoricalDataClient(api_key, api_secret)
-                logger.info("Alpaca client initialized successfully")
+                self.trading_client = TradingClient(api_key, api_secret, paper=True)
+                logger.info("Alpaca clients initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize Alpaca client: {e}")
     
@@ -435,4 +440,30 @@ class MarketAnalyst:
                     logger.error(f"Error fetching metadata for {symbol}: {e}")
             
             conn.commit()
-        logger.info(f"Populated metadata for {count} new symbols")
+        if count > 0:
+            logger.info(f"Populated metadata for {count} new symbols")
+        else:
+            logger.info("Metadata up to date for all symbols")
+
+    def is_trading_day(self) -> bool:
+        """
+        Check if today is a trading day (Monday-Friday, non-holiday).
+        Uses Alpaca Calendar (if available) or fallback to simple weekday check.
+        Ensures dates are checked in US/Eastern time.
+        """
+        # Always check date in US/Eastern (Market Time) to avoid timezone/midnight issues
+        tz_ny = pytz.timezone('America/New_York')
+        today_ny = datetime.now(tz_ny).date()
+
+        if self.trading_client:
+            try:
+                req = GetCalendarRequest(start=today_ny, end=today_ny)
+                calendar = self.trading_client.get_calendar(req)
+                # If we get a calendar entry for today, it's a trading day
+                return len(calendar) > 0
+            except Exception as e:
+                logger.warning(f"Failed to check market calendar: {e}")
+                # Continue to fallback
+        
+        # Fallback: Simple weekend check (0=Mon, 4=Fri)
+        return today_ny.weekday() <= 4
