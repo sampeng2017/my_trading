@@ -427,13 +427,11 @@ Based on the above, what action do you recommend?
         """Generate simple rule-based recommendation when AI unavailable."""
         price = context.get('price', 0)
         sma_50 = context.get('sma_50')
+        atr = context.get('atr')
         position_qty = context.get('current_position', {}).get('quantity', 0)
+        is_volatile = context.get('is_volatile', False)
         
-        # Simple logic: 
-        # - Above SMA50 and no position = potential BUY
-        # - Below SMA50 and has position = potential SELL
-        # - Has position = HOLD, else SKIP
-        
+        # Default action and reasoning
         if position_qty > 0:
             action = 'HOLD'
             reasoning = "Maintaining current position pending further analysis"
@@ -441,6 +439,7 @@ Based on the above, what action do you recommend?
             action = 'SKIP'
             reasoning = "Insufficient data - not recommended for new entry"
         
+        # If we have SMA, use traditional SMA-based signals
         if price and sma_50:
             if price > sma_50 and position_qty == 0:
                 action = 'BUY'
@@ -448,6 +447,27 @@ Based on the above, what action do you recommend?
             elif price < sma_50 and position_qty > 0:
                 action = 'SELL'
                 reasoning = f"Price ${price:.2f} below 50-day SMA ${sma_50:.2f}, consider taking profits"
+        
+        # Fallback: If no SMA but we have price and low volatility, consider BUY for screened stocks
+        elif price and price > 0 and position_qty == 0 and not is_volatile:
+            # These stocks were pre-screened by Alpaca's screener, so they have momentum
+            # If they're not too volatile, they might be worth buying
+            action = 'BUY'
+            confidence = 0.4  # Slightly higher confidence than pure SKIP
+            reasoning = f"Screened stock at ${price:.2f} with manageable volatility - potential entry"
+            
+            return {
+                'symbol': symbol,
+                'step1_technical': 'Rule-based analysis (AI unavailable, no SMA data)',
+                'step2_sentiment': 'No sentiment analysis available',
+                'step3_risk': 'Pre-screened by Alpaca momentum filter',
+                'action': action,
+                'confidence': confidence,
+                'reasoning': reasoning,
+                'target_price': None,
+                'stop_loss': None,
+                'timestamp': datetime.now().isoformat()
+            }
         
         return {
             'symbol': symbol,
