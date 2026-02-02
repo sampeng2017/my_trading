@@ -299,7 +299,7 @@ class StrategyPlanner:
         
         prompt = f"""You are a Senior Financial Analyst evaluating a trade opportunity.
 
-**Task:** Analyze whether to BUY, SELL, or HOLD {symbol}.
+**Task:** Analyze {symbol} and decide on an action.
 
 **Market Data:**
 - Current Price: ${price:.2f}
@@ -332,12 +332,14 @@ Check position sizing. Is this position overweight? Should you rebalance?
 **Step 4: Final Recommendation**
 Based on the above, what action do you recommend?
 
+{"**Valid Actions:** BUY (add to position), SELL (reduce/exit), or HOLD (maintain current position)" if position_qty > 0 else "**Valid Actions:** BUY (open new position) or SKIP (not worth buying now)"}
+
 **Output Format (JSON ONLY, no preamble, no markdown code blocks):**
 {{
   "step1_technical": "Your technical analysis in 20 words",
   "step2_sentiment": "Your sentiment analysis in 20 words",
   "step3_risk": "Your risk assessment in 20 words",
-  "action": "BUY" | "SELL" | "HOLD",
+  "action": "{"BUY | SELL | HOLD" if position_qty > 0 else "BUY | SKIP"}",
   "confidence": 0.0-1.0,
   "reasoning": "Final justification in 30 words",
   "target_price": null or number (for BUY/SELL),
@@ -406,10 +408,14 @@ Based on the above, what action do you recommend?
         # Simple logic: 
         # - Above SMA50 and no position = potential BUY
         # - Below SMA50 and has position = potential SELL
-        # - Otherwise HOLD
+        # - Has position = HOLD, else SKIP
         
-        action = 'HOLD'
-        reasoning = "Insufficient data for recommendation"
+        if position_qty > 0:
+            action = 'HOLD'
+            reasoning = "Maintaining current position pending further analysis"
+        else:
+            action = 'SKIP'
+            reasoning = "Insufficient data - not recommended for new entry"
         
         if price and sma_50:
             if price > sma_50 and position_qty == 0:
