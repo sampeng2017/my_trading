@@ -21,6 +21,10 @@ def temp_db():
     fd, db_path = tempfile.mkstemp(suffix='.db')
     os.close(fd)
     
+    # Force local mode for tests to prevent connecting to Turso
+    old_mode = os.environ.get('DB_MODE')
+    os.environ['DB_MODE'] = 'local'
+    
     # Initialize schema
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -62,6 +66,10 @@ def temp_db():
     
     # Cleanup
     os.unlink(db_path)
+    if old_mode:
+        os.environ['DB_MODE'] = old_mode
+    elif 'DB_MODE' in os.environ:
+        del os.environ['DB_MODE']
 
 
 @pytest.fixture
@@ -249,6 +257,24 @@ Z12345678,Individual,AAPL,APPLE INC,50,$178.45,"$8,922.50","$8,500.00",$170.00,$
         
         assert aapl['current_value'] == pytest.approx(8922.50, rel=0.01)
 
-
+    
+    def test_pending_activity(self, temp_db, tmp_path):
+        """Test that Pending Activity is subtracted from cash balance."""
+        # CSV with $10,000 cash and -$200 pending activity
+        # Note: Fidelity puts "Pending activity" in specific column, logic checks Symbol
+        csv_content = """Account Number,Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Cost Basis Per Share,Unrealized Gain/Loss,Unrealized Gain/Loss %,Type
+Z12345678,Individual,FCASH**,HELD IN FCASH,,,$10000.00,,,,,Cash
+Z12345678,Individual,Pending activity,,,,-$200.00,,,,,Cash
+"""
+        csv_path = tmp_path / "pending_activity.csv"
+        csv_path.write_text(csv_content)
+        
+        accountant = PortfolioAccountant(temp_db)
+        accountant.import_fidelity_csv(str(csv_path))
+        
+        snapshot = accountant.get_latest_snapshot()
+        
+        # Expected: $10,000 (Cash) + (-$200) (Pending) = $9,800
+        assert snapshot['cash_balance'] == pytest.approx(9800.00, rel=0.01)
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

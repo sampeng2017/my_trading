@@ -90,21 +90,32 @@ class PortfolioAccountant:
         total_holdings_value = 0.0
         cash_balance = 0.0
         
-        # Process each row
         for _, row in df.iterrows():
             symbol = str(row.get('Symbol', '')).strip().upper()
             
             if not symbol or symbol == 'NAN':
+                continue
+            
+
+
+            # Handle "Pending activity" (usually negative debit for unsettled buys)
+            # Fidelity CSV uses "Pending activity" in the Account Name or Symbol column depending on format
+            # Based on user file: Symbol column contains "Pending activity"
+            if 'PENDING ACTIVITY' in symbol.upper():
+                pending_val = self._parse_currency(row.get('Current Value', 0))
+                cash_balance += pending_val
+                logger.debug(f"Pending activity detected: {pending_val:,.2f} (Adjusting cash)")
                 continue
 
             # Skip invalid symbols (numeric IDs like CUSIP, restricted shares)
             if symbol.isdigit():
                 logger.debug(f"Skipping numeric symbol (likely CUSIP): {symbol}")
                 continue
-            
+
             # Handle cash positions (Fidelity uses SPAXX for money market)
             # Also match symbols starting with known cash prefixes (e.g., FCASH**)
             is_cash = symbol in self.CASH_SYMBOLS or symbol.startswith('FCASH') or symbol.startswith('SPAXX')
+            
             if is_cash:
                 cash_value = self._parse_currency(row.get('Current Value', 0))
                 cash_balance += cash_value
