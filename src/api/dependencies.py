@@ -40,9 +40,14 @@ def get_config():
 
 def get_market_analyst():
     from src.agents.market_analyst import MarketAnalyst
-    config = get_config()
+    config_obj = get_config()
     db_path = get_db_path()
-    return MarketAnalyst(db_path, config.get_agent_config('market_analyst'))
+    ma_config = config_obj.get_agent_config('market_analyst') or {}
+    api_keys = config_obj.config.get('api_keys', {})
+    # Get keys from env (preferred) or config.yaml api_keys section
+    alpaca_key = os.getenv("ALPACA_API_KEY") or api_keys.get('alpaca_api_key')
+    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or api_keys.get('alpaca_secret_key')
+    return MarketAnalyst(db_path, alpaca_key, alpaca_secret, ma_config)
 
 def get_portfolio_accountant():
     from src.agents.portfolio_accountant import PortfolioAccountant
@@ -59,20 +64,20 @@ def get_strategy_planner():
 def get_trade_advisor():
     from src.agents.trade_advisor import TradeAdvisor
     from src.agents.market_analyst import MarketAnalyst
-    
+
     config_obj = get_config()
     config = config_obj.config
     db_path = get_db_path()
     gemini_key = os.getenv("GEMINI_API_KEY")
-    
+    api_keys = config.get('api_keys', {})
+
     # Initialize Market Analyst for on-demand data fetching
-    # Extract config for Market Analyst and pass keys directly if needed
     ma_config = config_obj.get_agent_config('market_analyst') or {}
-    
-    # Get keys from env (preferred) or config
-    alpaca_key = os.getenv("ALPACA_API_KEY") or ma_config.get('api_key')
-    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or ma_config.get('api_secret')
-    
+
+    # Get keys from env (preferred) or config.yaml api_keys section
+    alpaca_key = os.getenv("ALPACA_API_KEY") or api_keys.get('alpaca_api_key')
+    alpaca_secret = os.getenv("ALPACA_SECRET_KEY") or api_keys.get('alpaca_secret_key')
+
     market_analyst = MarketAnalyst(db_path, alpaca_key, alpaca_secret, ma_config)
-    
+
     return TradeAdvisor(db_path, gemini_key, config, market_analyst)

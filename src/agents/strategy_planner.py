@@ -73,7 +73,11 @@ class StrategyPlanner:
         """
         # Gather context from database
         context = self._gather_context(symbol)
-        
+
+        if context.get('market_data_stale'):
+            logger.warning(f"Skipping {symbol}: market data is stale (run market scan first)")
+            return None
+
         if not context.get('price'):
             logger.warning(f"No price data available for {symbol}")
             return None
@@ -178,18 +182,37 @@ class StrategyPlanner:
     
     def _gather_context(self, symbol: str) -> Dict:
         """Pull all relevant data from database."""
+        # Market data TTL: 24 hours (configurable)
+        market_data_ttl_hours = self.config.get('limits', {}).get('strategy_data_ttl_hours', 24)
+
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            
-            # Get latest price data
+
+            # Get latest price data with timestamp for TTL check
             cursor.execute("""
-                SELECT price, atr, sma_50, is_volatile 
-                FROM market_data 
-                WHERE symbol = ? 
-                ORDER BY timestamp DESC 
+                SELECT price, atr, sma_50, is_volatile, timestamp
+                FROM market_data
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
                 LIMIT 1
             """, (symbol.upper(),))
-            market_data = cursor.fetchone()
+            market_row = cursor.fetchone()
+
+            # Check if market data is stale
+            market_data = None
+            market_data_stale = False
+            if market_row:
+                try:
+                    data_timestamp = datetime.fromisoformat(market_row[4])
+                    age = datetime.now() - data_timestamp
+                    if age > timedelta(hours=market_data_ttl_hours):
+                        market_data_stale = True
+                        logger.warning(f"Market data for {symbol} is stale ({age.total_seconds()/3600:.1f}h old)")
+                    else:
+                        market_data = market_row[:4]  # price, atr, sma_50, is_volatile
+                except Exception as e:
+                    logger.error(f"Failed to parse market data timestamp for {symbol}: {e}")
+                    market_data = market_row[:4]  # Use data anyway if timestamp parsing fails
             
             # Get recent news sentiment (only from last 72 hours)
             # Use datetime() to parse ISO timestamps (which have 'T' separator)
@@ -229,6 +252,7 @@ class StrategyPlanner:
             'atr': market_data[1] if market_data else None,
             'sma_50': market_data[2] if market_data else None,
             'is_volatile': bool(market_data[3]) if market_data else False,
+            'market_data_stale': market_data_stale,
             'news_sentiment': [
                 {'sentiment': n[0], 'confidence': n[1], 'action': n[2], 'reason': n[3]}
                 for n in news_items

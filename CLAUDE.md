@@ -50,6 +50,7 @@ python scripts/test_phase1_db.py     # Test database connection (local/Turso)
 python scripts/migrate_to_turso.py   # Migrate local DB to Turso cloud
 python scripts/sync_db.py --backup   # Backup: Cloud → Local
 python scripts/sync_db.py --restore  # Restore: Local → Cloud
+python scripts/run_scheduled.py premarket  # Scheduled run with market calendar check
 
 # REST API & Dashboard
 uvicorn src.api.main:app --port 8000  # Start API server
@@ -61,7 +62,7 @@ open http://localhost:8000/docs       # Interactive API docs
 
 ### Multi-Agent Pipeline
 
-The system uses a 7-agent architecture with clear separation between deterministic and AI-powered components:
+The system uses an 8-agent architecture with clear separation between deterministic and AI-powered components:
 
 **Data Collection Stage** (all deterministic):
 1. **PortfolioAccountant** (`src/agents/portfolio_accountant.py`) - Parses Fidelity CSV exports, creates portfolio snapshots, infers trades via state diffing
@@ -70,11 +71,12 @@ The system uses a 7-agent architecture with clear separation between determinist
 4. **StockScreener** (`src/agents/stock_screener.py`) - Discovers tradeable stocks dynamically using Alpaca movers API + Alpha Vantage fallback, with optional LLM re-ranking via Gemini
 
 **Analysis Stage** (AI-powered):
-5. **StrategyPlanner** (`src/agents/strategy_planner.py`) - Synthesizes all inputs using Chain-of-Thought prompting, generates BUY/SELL/HOLD recommendations (Gemini Pro)
+5. **StrategyPlanner** (`src/agents/strategy_planner.py`) - Synthesizes all inputs using Chain-of-Thought prompting, generates BUY/SELL/HOLD/SKIP recommendations (Gemini Pro)
+6. **TradeAdvisor** (`src/agents/trade_advisor.py`) - Natural language Q&A about trades, with AI intent extraction and on-demand market data fetching (24h cache)
 
 **Risk & Notification Stage** (deterministic):
-6. **RiskController** (`src/agents/risk_controller.py`) - Enforces hard constraints: cash availability, position size limits (20%), sector exposure caps (40%), volatility filters, liquidity requirements
-7. **NotificationSpecialist** (`src/agents/notification_specialist.py`) - Routes alerts via iMessage (urgent) or email (summaries), respects quiet hours
+7. **RiskController** (`src/agents/risk_controller.py`) - Enforces hard constraints: cash availability, position size limits (20%), sector exposure caps (40%), volatility filters, liquidity requirements
+8. **NotificationSpecialist** (`src/agents/notification_specialist.py`) - Routes alerts via iMessage (urgent) or email (summaries), respects quiet hours
 
 ### Main Entry Point
 
@@ -168,11 +170,16 @@ All agents use `get_connection()` context manager for database access.
 - `GET /market/price/{symbol}` - Get latest price
 - `GET /agent/recommendations` - Recent strategy recommendations
 - `POST /agent/ask` - Ask trade advisor (natural language)
+- `POST /orchestrator/run` - Trigger orchestrator run (mode: premarket/market/postmarket)
+- `GET /orchestrator/status/{job_id}` - Get run status
+- `GET /orchestrator/history` - Recent run history
+- `GET /orchestrator/current` - Check if run in progress
 
-### Web Dashboard (GitHub OAuth)
-- `GET /` - Dashboard home with portfolio summary
-- `GET /portfolio` - Full holdings view
-- `GET /recommendations` - Trade recommendations list
+### Web Dashboard (GitHub OAuth, mobile-responsive)
+- `GET /` - Dashboard home with portfolio summary + orchestrator controls
+- `GET /portfolio` - Full holdings view with CSV upload
+- `GET /recommendations` - Trade recommendations with filters
+- `GET /chat` - Trade advisor chat interface (AI-powered)
 - `GET /auth/login` - Login with GitHub
 - `GET /auth/logout` - Logout
 

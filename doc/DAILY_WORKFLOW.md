@@ -23,7 +23,15 @@ The system will automatically run at:
 
 You just receive iMessage alerts and decide whether to trade.
 
-### Option B: Manual Control
+### Option B: Web Dashboard (Remote Access)
+Use from your phone or any browser:
+1. Go to https://web-production-7bb53.up.railway.app/ (or localhost:8000)
+2. Login with GitHub
+3. Click **Run Premarket/Market/Postmarket** buttons
+4. Use **/chat** to ask questions like "Should I buy AAPL?"
+5. Upload portfolio CSV via drag-and-drop on **/portfolio**
+
+### Option C: Manual Command Line
 Run commands yourself when you want:
 ```bash
 cd /Users/shengpeng/study/repo/my_trading
