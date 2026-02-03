@@ -11,7 +11,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!isoTime || isoTime === 'None') return;
 
         try {
-            const date = new Date(isoTime);
+            // Force UTC interpretation if naive (no Z or offset)
+            let timestamp = isoTime;
+            if (!timestamp.endsWith('Z') && !timestamp.includes('+') && !timestamp.split('T')[1]?.includes('-')) {
+                timestamp += 'Z';
+            }
+            const date = new Date(timestamp);
             // Check if date is valid
             if (isNaN(date.getTime())) return;
 
