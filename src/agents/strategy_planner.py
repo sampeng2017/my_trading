@@ -492,19 +492,33 @@ Be decisive. If momentum is positive and there's no negative catalyst, lean towa
 
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            
+            symbol = recommendation['symbol']
+            action = recommendation['action']
+            timestamp = recommendation.get('timestamp') or datetime.now().isoformat()
+
+            # Skip duplicate recommendations for the same symbol + action on the same day
+            cursor.execute("""
+                SELECT 1
+                FROM strategy_recommendations
+                WHERE symbol = ? AND action = ? AND date(timestamp) = date(?)
+                LIMIT 1
+            """, (symbol, action, timestamp))
+            if cursor.fetchone():
+                logger.info(f"Skipping duplicate recommendation for {symbol} ({action}) on {timestamp[:10]}")
+                return
+
             cursor.execute("""
                 INSERT INTO strategy_recommendations
                 (symbol, action, confidence, reasoning, target_price, stop_loss, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                recommendation['symbol'],
-                recommendation['action'],
+                symbol,
+                action,
                 recommendation['confidence'],
                 recommendation.get('reasoning'),
                 recommendation.get('target_price'),
                 recommendation.get('stop_loss'),
-                recommendation['timestamp']
+                timestamp
             ))
             
             conn.commit()
