@@ -195,9 +195,12 @@ async def trigger_run(request: Request):
     try:
         body = await request.json()
         mode = body.get("mode", "market")
+        max_extra_recs = body.get("max_extra_recs")
 
         # Call orchestrator directly using its RunRequest model
-        result = await orch_module.run_orchestrator(orch_module.RunRequest(mode=mode), _="direct")
+        result = await orch_module.run_orchestrator(
+            orch_module.RunRequest(mode=mode, max_extra_recs=max_extra_recs), _="direct"
+        )
         return JSONResponse(result.model_dump())
     except HTTPException as e:
         # Preserve the original status code and use 'detail' for consistency

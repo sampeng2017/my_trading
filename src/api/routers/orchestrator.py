@@ -16,6 +16,7 @@ router = APIRouter(prefix="/orchestrator", tags=["orchestrator"])
 
 class RunRequest(BaseModel):
     mode: str = "market"  # premarket, market, postmarket, review
+    max_extra_recs: int | None = None  # Max non-portfolio recommendations (default: 3 from config)
 
 
 class RunResponse(BaseModel):
@@ -116,7 +117,7 @@ def get_recommended_mode() -> dict:
         }
 
 
-def _run_orchestrator(job_id: int, mode: str):
+def _run_orchestrator(job_id: int, mode: str, max_extra_recs: int = None):
     """Background task to run the orchestrator."""
     import sys
 
@@ -130,7 +131,7 @@ def _run_orchestrator(job_id: int, mode: str):
 
     try:
         _append_log(job_id, f"Starting {mode} run...")
-        
+
         # Update status to running
         with get_connection(_get_db_path()) as conn:
             cursor = conn.cursor()
@@ -139,14 +140,14 @@ def _run_orchestrator(job_id: int, mode: str):
                 (datetime.now().isoformat(), job_id)
             )
             conn.commit()
-        
+
         _append_log(job_id, "Initializing orchestrator...")
 
         # Run orchestrator
         orchestrator = TradingOrchestrator()
-        
+
         _append_log(job_id, "Running orchestrator pipeline...")
-        orchestrator.run(mode=mode)
+        orchestrator.run(mode=mode, max_extra_recs=max_extra_recs)
         
         _append_log(job_id, "✓ Run completed successfully!")
 
@@ -215,7 +216,7 @@ async def run_orchestrator(request: RunRequest, _: str = Depends(verify_api_key)
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     # Start background thread
-    thread = threading.Thread(target=_run_orchestrator, args=(job_id, request.mode))
+    thread = threading.Thread(target=_run_orchestrator, args=(job_id, request.mode, request.max_extra_recs))
     thread.daemon = True
     thread.start()
 

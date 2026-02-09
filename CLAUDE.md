@@ -27,6 +27,9 @@ python src/main_orchestrator.py --mode premarket
 python src/main_orchestrator.py --mode market
 python src/main_orchestrator.py --mode postmarket
 
+# Limit non-portfolio recommendations (default: 3)
+python src/main_orchestrator.py --mode market --max-extra-recs 5
+
 # Run all tests
 python -m pytest tests/ -v
 
@@ -133,6 +136,7 @@ Key settings:
 - `ai.model_sentiment`: gemini-2.0-flash
 - `limits.max_news_articles`: 5 articles per symbol
 - `limits.market_data_ttl_seconds`: 300 (5 min cache)
+- `limits.max_extra_recommendations`: 3 (max non-portfolio recommendations, top N by confidence)
 - `screener.enabled`: true (dynamic stock discovery)
 - `screener.max_screened_symbols`: 10 symbols from screening
 - `screener.use_llm_ranking`: true (AI-powered re-ranking)
@@ -172,7 +176,7 @@ All agents use `get_connection()` context manager for database access.
 - `GET /market/price/{symbol}` - Get latest price
 - `GET /agent/recommendations` - Recent strategy recommendations
 - `POST /agent/ask` - Ask trade advisor (natural language)
-- `POST /orchestrator/run` - Trigger orchestrator run (mode: premarket/market/postmarket)
+- `POST /orchestrator/run` - Trigger orchestrator run (mode, optional max_extra_recs)
 - `GET /orchestrator/status/{job_id}` - Get run status
 - `GET /orchestrator/history` - Recent run history
 - `GET /orchestrator/current` - Check if run in progress

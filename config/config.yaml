@@ -60,6 +60,7 @@ limits:
   max_news_articles: 5             # Articles to analyze per symbol
   notification_truncation: 500     # Max chars for log/display
   market_data_ttl_seconds: 300     # 5 minutes cache validity
+  max_extra_recommendations: 3     # Max non-portfolio recommendations (top N by confidence)
 
 # Stock Screener Configuration
 screener:

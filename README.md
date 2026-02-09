@@ -251,6 +251,10 @@ risk:
   risk_per_trade_pct: 0.015      # Risk 1.5% per trade
   stop_loss_atr_multiplier: 2.5  # Stop at 2.5x ATR
 
+# Recommendation Limits
+limits:
+  max_extra_recommendations: 3   # Max non-portfolio recs (top N by confidence)
+
 # Stock Screener (dynamic stock discovery)
 screener:
   enabled: true                  # Enable dynamic screening
@@ -303,6 +307,9 @@ python src/main_orchestrator.py
 python src/main_orchestrator.py --mode premarket
 python src/main_orchestrator.py --mode market
 python src/main_orchestrator.py --mode postmarket
+
+# Limit non-portfolio recommendations (default: 3, portfolio holdings always included)
+python src/main_orchestrator.py --mode market --max-extra-recs 5
 ```
 
 ### Scheduled Execution (launchd)
@@ -380,6 +387,7 @@ Drop CSV files into `inbox/` folder and they'll be imported automatically.
  | `/portfolio/summary` | GET | Current holdings and value |
  | `/market/prices/{symbol}` | GET | Real-time price and indicators |
  | `/agent/ask` | POST | Ask the Trade Advisor a question |
+| `/orchestrator/run` | POST | Trigger run (mode, optional max_extra_recs) |
  
  ### Example Request
  

@@ -109,6 +109,9 @@ class TradingOrchestrator:
         # Get timezone
         tz_name = self.config.get('schedule', {}).get('timezone', 'America/Los_Angeles')
         self.tz = pytz.timezone(tz_name)
+
+        # Runtime overrides (set via run())
+        self._max_extra_recs = None
     
     def get_current_mode(self) -> str:
         """Determine current operating mode based on time."""
@@ -125,24 +128,26 @@ class TradingOrchestrator:
         else:
             return 'closed'
     
-    def run(self, mode: str = None):
+    def run(self, mode: str = None, max_extra_recs: int = None):
         """
         Run orchestration based on mode.
-        
+
         Args:
             mode: Operating mode (auto-detects if not specified)
+            max_extra_recs: Max non-portfolio recommendations to output (overrides config)
         """
         if mode == 'auto':
             mode = None
-            
+
         mode = mode or self.get_current_mode()
+        self._max_extra_recs = max_extra_recs
         now = datetime.now(self.tz)
-        
+
         logger.info(f"=" * 60)
         logger.info(f"Trading System Orchestrator - {now.strftime('%Y-%m-%d %I:%M %p %Z')}")
         logger.info(f"Mode: {mode.upper()}")
         logger.info(f"=" * 60)
-        
+
         if mode == 'premarket':
             self.run_premarket()
         elif mode == 'market':
@@ -199,33 +204,49 @@ class TradingOrchestrator:
             logger.info("🛑 Today is a market holiday or weekend. Skipping market analysis.")
             return
 
+        # Get current holdings (used later for recommendation filtering)
+        holdings_symbols = set(self.portfolio.get_holdings_symbols())
+
         # Get symbols
         symbols = self._get_monitoring_symbols()
-        
+
         # Ensure metadata is populated for any new symbols (from screener)
         logger.info("Populating metadata for new symbols...")
         self.market.populate_metadata(symbols)
-        
+
         # Update market data
         logger.info("Updating market data...")
         self.market.scan_symbols(symbols)
-        
+
         # Check for recent news
         self.news.analyze_batch(symbols)
-        
-        # Generate recommendations
+
+        # Generate recommendations for all symbols
         logger.info("Generating recommendations...")
         recommendations = []
-        
+
         for symbol in symbols:
             rec = self.strategy.generate_recommendation(symbol)
             if rec and rec.get('action') != 'HOLD':
                 recommendations.append(rec)
                 logger.info(f"  {symbol}: {rec.get('action')} (confidence: {rec.get('confidence', 0):.0%})")
-        
+
+        # Limit non-portfolio recommendations to top N by confidence
+        max_extra = self._max_extra_recs
+        if max_extra is None:
+            max_extra = self.config.get('limits', {}).get('max_extra_recommendations', 3)
+
+        portfolio_recs = [r for r in recommendations if r['symbol'] in holdings_symbols]
+        extra_recs = [r for r in recommendations if r['symbol'] not in holdings_symbols]
+        extra_recs.sort(key=lambda r: r.get('confidence', 0), reverse=True)
+        extra_recs = extra_recs[:max_extra]
+
+        recommendations = portfolio_recs + extra_recs
+        logger.info(f"Recommendations: {len(portfolio_recs)} portfolio + {len(extra_recs)} non-portfolio (limit {max_extra})")
+
         # Validate through risk controller
         approved_trades = []
-        
+
         for rec in recommendations:
             result = self.risk.validate_trade(rec)
             
@@ -413,22 +434,24 @@ def main():
                        default='auto', help='Operating mode (default: auto-detect)')
     parser.add_argument('--config', help='Path to config file')
     parser.add_argument('--log', help='Path to log file')
-    
+    parser.add_argument('--max-extra-recs', type=int, default=None,
+                       help='Max non-portfolio recommendations to output (default: 3 from config)')
+
     args = parser.parse_args()
-    
+
     # Setup logging
     setup_logging(args.log)
-    
+
     # Load config
     config = None
     if args.config:
         config = load_config(args.config)
-    
+
     # Run orchestrator
     orchestrator = TradingOrchestrator(config)
-    
+
     mode = None if args.mode == 'auto' else args.mode
-    orchestrator.run(mode)
+    orchestrator.run(mode, max_extra_recs=args.max_extra_recs)
     
     return 0
 
