@@ -48,6 +48,12 @@ watchlist: []
 skip_list: ["NSAV"]
 
 
+# Gemini Rate Limiting
+gemini:
+  min_call_interval_seconds: 4.0   # Min seconds between API calls (15 RPM = 4s)
+  retry_base_delay_seconds: 10.0   # Base delay for retry backoff (10s, 20s, 40s)
+  max_retries: 3                   # Max retry attempts on rate limit
+
 # AI Configuration
 ai:
   model_strategy: "gemini-2.0-flash"     # Main model for trade analysis

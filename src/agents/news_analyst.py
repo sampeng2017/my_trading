@@ -17,7 +17,7 @@ import json
 import logging
 import time
 
-from utils.gemini_client import call_with_retry
+from src.utils.gemini_client import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -157,24 +157,36 @@ class NewsAnalyst:
     def analyze_batch(self, symbols: List[str]) -> List[Dict]:
         """
         Fetch and analyze news for multiple symbols.
-        
+        Groups articles by symbol and analyzes each group in a single Gemini call.
+
         Args:
             symbols: List of stock ticker symbols
-            
+
         Returns:
             List of sentiment analyses
         """
         news_items = self.fetch_news(symbols)
+        if not news_items:
+            return []
+
         analyses = []
-        
-        for i, item in enumerate(news_items):
-            analysis = self.analyze_sentiment(item)
-            analyses.append(analysis)
-            
-            # Rate limiting: 1s delay to avoid per-second burst limits
-            if i < len(news_items) - 1:
-                time.sleep(1.0)
-        
+
+        # Group articles by symbol for batched analysis
+        from collections import defaultdict
+        by_symbol = defaultdict(list)
+        for item in news_items:
+            by_symbol[item['symbol']].append(item)
+
+        for i, (symbol, items) in enumerate(by_symbol.items()):
+            if self.gemini_model and len(items) > 1:
+                # Batch: analyze all articles for this symbol in one Gemini call
+                batch_results = self._analyze_symbol_batch(items)
+                analyses.extend(batch_results)
+            else:
+                # Single article or no AI: use per-article method
+                for item in items:
+                    analyses.append(self.analyze_sentiment(item))
+
         return analyses
     
     def _build_sentiment_prompt(self, news_item: Dict) -> str:
@@ -203,6 +215,127 @@ Guidelines:
 
 Output ONLY the JSON, no other text."""
     
+    def _build_batch_sentiment_prompt(self, news_items: List[Dict]) -> str:
+        """Build prompt to analyze multiple articles for the same symbol in one call."""
+        symbol = news_items[0].get('symbol', 'Unknown')
+
+        articles_text = ""
+        for i, item in enumerate(news_items, 1):
+            headline = item.get('headline', 'N/A')
+            summary = (item.get('summary') or 'N/A')[:200]
+            articles_text += f"\nArticle {i}:\n  Headline: {headline}\n  Summary: {summary}\n"
+
+        return f"""You are a financial news analyst. Analyze these {len(news_items)} news articles for {symbol}.
+{articles_text}
+For EACH article, extract sentiment. Return a JSON array ONLY (no preamble, no markdown):
+[
+  {{
+    "article_index": 1,
+    "sentiment": "positive" | "negative" | "neutral",
+    "confidence": 0.0-1.0,
+    "implied_action": "BUY" | "SELL" | "HOLD",
+    "key_reason": "brief explanation in 10 words or less",
+    "urgency": "high" | "medium" | "low"
+  }}
+]
+
+Guidelines:
+- sentiment: Overall tone of each article for {symbol}
+- confidence: How certain the sentiment classification is
+- implied_action: What a rational investor might consider
+- key_reason: The main takeaway in very few words
+- urgency: high = breaking/material news, medium = significant, low = routine
+
+Output ONLY the JSON array, no other text."""
+
+    def _analyze_symbol_batch(self, news_items: List[Dict]) -> List[Dict]:
+        """Analyze all articles for one symbol in a single Gemini call."""
+        symbol = news_items[0].get('symbol', 'Unknown')
+        prompt = self._build_batch_sentiment_prompt(news_items)
+
+        def make_call():
+            return self.gemini_model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=self.temperature,
+                    max_output_tokens=200 * len(news_items)
+                )
+            )
+
+        response = call_with_retry(make_call, context=f"{symbol}_batch")
+
+        if response:
+            results = self._parse_batch_response(response.text, news_items)
+            if results:
+                return results
+
+        # Fallback: return fallback sentiment for each article
+        logger.warning(f"Batch sentiment failed for {symbol}, using fallback")
+        return [self._fallback_sentiment(item) for item in news_items]
+
+    def _parse_batch_response(self, response_text: str, news_items: List[Dict]) -> Optional[List[Dict]]:
+        """Parse a JSON array response from batch sentiment analysis."""
+        symbol = news_items[0].get('symbol', 'Unknown')
+
+        # Try to extract JSON array
+        text = response_text.strip()
+        if text.startswith('```'):
+            lines = text.split('\n', 1)
+            text = lines[1] if len(lines) > 1 else text
+            text = text.rsplit('```', 1)[0].strip()
+
+        # Find array bounds
+        start = text.find('[')
+        end = text.rfind(']') + 1
+        if start == -1 or end <= start:
+            logger.warning(f"No JSON array found in batch response for {symbol}")
+            return None
+
+        try:
+            parsed = json.loads(text[start:end])
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse batch JSON for {symbol}")
+            return None
+
+        if not isinstance(parsed, list):
+            return None
+
+        # Filter to only valid dict entries
+        parsed = [entry for entry in parsed if isinstance(entry, dict)]
+        if not parsed:
+            logger.warning(f"Batch response for {symbol} contained no valid entries")
+            return None
+
+        # Map results back to articles and write to DB
+        results = []
+        for i, item in enumerate(news_items):
+            # Find matching result by article_index or position
+            matched = None
+            for entry in parsed:
+                if entry.get('article_index') == i + 1:
+                    matched = entry
+                    break
+            if not matched and i < len(parsed):
+                matched = parsed[i]
+
+            if matched:
+                result = {
+                    'symbol': symbol,
+                    'headline': item.get('headline', ''),
+                    'sentiment': matched.get('sentiment', 'neutral'),
+                    'confidence': matched.get('confidence', 0.0),
+                    'implied_action': matched.get('implied_action', 'HOLD'),
+                    'key_reason': matched.get('key_reason', ''),
+                    'urgency': matched.get('urgency', 'low'),
+                    'timestamp': datetime.now().isoformat()
+                }
+                self._write_to_db(result)
+                results.append(result)
+            else:
+                results.append(self._fallback_sentiment(item))
+
+        return results
+
     def _parse_json_response(self, response_text: str) -> Optional[Dict]:
         """Parse JSON from Gemini response, handling common issues."""
         try:

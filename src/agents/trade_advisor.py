@@ -202,16 +202,19 @@ class TradeAdvisor:
         try:
             prompt = f"""Analyze this trading question and extract the intent.
             Question: "{question}"
-            
+
             Return ONLY a valid JSON object with these keys:
             - symbol: Stock ticker (e.g., AAPL) or null
             - action: BUY, SELL, HOLD, or null
             - quantity: Number of shares (integer) or null
             - price: Price target (float) or null
-            
+
             Example: {{"symbol": "GOOG", "action": "BUY", "quantity": 10, "price": 150.0}}"""
-            
-            response = self.gemini_model.generate_content(prompt)
+
+            def make_call():
+                return self.gemini_model.generate_content(prompt)
+
+            response = call_with_retry(make_call, context="trade_advisor_intent")
             if response and response.text:
                 # Use plain JSON parsing instead of _parse_response (which expects complex structure)
                 text = response.text.strip()

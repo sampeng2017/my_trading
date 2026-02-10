@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import logging
+import time
 import argparse
 
 # Add src to path
@@ -64,6 +65,15 @@ class TradingOrchestrator:
         self.config = config or load_config()
         self.db_path = get_db_path(self.config)
         
+        # Configure Gemini rate limiter before initializing agents
+        from src.utils.gemini_client import configure as configure_gemini
+        gemini_config = self.config.get('gemini', {})
+        configure_gemini(
+            min_call_interval=gemini_config.get('min_call_interval_seconds'),
+            retry_base_delay=gemini_config.get('retry_base_delay_seconds'),
+            max_retries=gemini_config.get('max_retries'),
+        )
+
         # Initialize agents
         api_keys = self.config.get('api_keys', {})
         
@@ -225,11 +235,15 @@ class TradingOrchestrator:
         logger.info("Generating recommendations...")
         recommendations = []
 
-        for symbol in symbols:
+        for i, symbol in enumerate(symbols):
             rec = self.strategy.generate_recommendation(symbol)
             if rec and rec.get('action') != 'HOLD':
                 recommendations.append(rec)
                 logger.info(f"  {symbol}: {rec.get('action')} (confidence: {rec.get('confidence', 0):.0%})")
+
+            # Rate limiting: avoid burst Gemini calls
+            if i < len(symbols) - 1:
+                time.sleep(2.0)
 
         # Limit non-portfolio recommendations to top N by confidence
         max_extra = self._max_extra_recs

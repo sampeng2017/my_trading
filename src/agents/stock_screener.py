@@ -20,6 +20,8 @@ import re  # New import
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 
+from src.utils.gemini_client import call_with_retry
+
 logger = logging.getLogger(__name__)
 
 # Try to import Alpaca
@@ -571,20 +573,27 @@ Respond ONLY with valid JSON, no markdown formatting."""
         try:
             # Call Gemini with low temperature for consistency
             # Disable safety filters for financial analysis (not giving advice, just screening)
-            response = self.gemini_model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=self.temperature_screening,
-                    max_output_tokens=4000
-                ),
-                safety_settings={
-                    "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
-                    "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-                    "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-                    "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE"
-                }
-            )
-            
+            def _make_llm_call():
+                return self.gemini_model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=self.temperature_screening,
+                        max_output_tokens=4000
+                    ),
+                    safety_settings={
+                        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+                        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+                        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+                        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE"
+                    }
+                )
+
+            response = call_with_retry(_make_llm_call, context="screener_rerank")
+
+            if not response:
+                logger.warning("LLM re-ranking failed after retries, using rule-based order")
+                return [c['symbol'] for c in candidates[:max_symbols]]
+
             # Check if response has text (may be blocked by safety filters)
             if not response.text:
                 logger.warning(f"LLM response blocked (finish_reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'})")
