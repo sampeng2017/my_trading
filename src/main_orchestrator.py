@@ -33,6 +33,7 @@ from agents.strategy_planner import StrategyPlanner
 from agents.risk_controller import RiskController
 from agents.notification_specialist import NotificationSpecialist
 from agents.stock_screener import StockScreener
+from agents.recommendation_evaluator import RecommendationEvaluator
 
 # Setup logging
 def setup_logging(log_path: str = None):
@@ -103,6 +104,12 @@ class TradingOrchestrator:
         
         self.notifier = NotificationSpecialist(self.db_path, self.config)
 
+        self.evaluator = RecommendationEvaluator(
+            self.db_path,
+            gemini_key=api_keys.get('gemini_api_key'),
+            config=self.config
+        )
+
         # Initialize stock screener (optional)
         self.screener = None
         screener_config = self.config.get('screener', {})
@@ -166,6 +173,8 @@ class TradingOrchestrator:
             self.run_postmarket()
         elif mode == 'review':
             self.run_portfolio_review()
+        elif mode == 'evaluate':
+            self.run_evaluation()
         else:
             logger.info(f"Outside market hours ({now.strftime('%I:%M %p')}). No action taken.")
     
@@ -402,6 +411,33 @@ class TradingOrchestrator:
         
         logger.info(f"✅ Portfolio review complete. {len(approved_trades)} trade recommendations.")
 
+    def run_evaluation(self):
+        """Evaluate past recommendations against actual market performance."""
+        logger.info("📊 Running recommendation evaluation...")
+
+        status = 'completed'
+        error = None
+
+        try:
+            result = self.evaluator.evaluate_recommendations()
+
+            total = result.get('total_evaluated', 0)
+            if total == 0:
+                logger.info("No eligible recommendations to evaluate.")
+            else:
+                logger.info(f"Evaluated {total} recommendations.")
+                logger.info(result.get('summary', ''))
+
+            logger.info("✅ Recommendation evaluation complete")
+
+        except Exception as e:
+            status = 'failed'
+            error = str(e)
+            logger.error(f"Evaluation run failed: {e}")
+            raise e
+        finally:
+            self._log_run('evaluate', status, error)
+
     def _has_run_today(self, mode: str) -> bool:
         """Check if a specific mode has already completed successfully today."""
         from src.data.db_connection import get_connection
@@ -444,7 +480,7 @@ class TradingOrchestrator:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Trading System Orchestrator')
-    parser.add_argument('--mode', choices=['premarket', 'market', 'postmarket', 'review', 'auto'],
+    parser.add_argument('--mode', choices=['premarket', 'market', 'postmarket', 'review', 'evaluate', 'auto'],
                        default='auto', help='Operating mode (default: auto-detect)')
     parser.add_argument('--config', help='Path to config file')
     parser.add_argument('--log', help='Path to log file')

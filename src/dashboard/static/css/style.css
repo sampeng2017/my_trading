@@ -624,6 +624,135 @@ footer {
     text-align: center;
 }
 
+/* === Evaluation Page === */
+
+/* Score badge (inline pill in table) */
+.score-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.score-excellent {
+    background: #c8e6c9;
+    color: #2e7d32;
+}
+
+.score-good {
+    background: #dcedc8;
+    color: #558b2f;
+}
+
+.score-neutral {
+    background: #fff9c4;
+    color: #f9a825;
+}
+
+.score-poor {
+    background: #ffe0b2;
+    color: #ef6c00;
+}
+
+.score-bad {
+    background: #ffcdd2;
+    color: #c62828;
+}
+
+/* Score chips in analytics summary */
+.score-chip {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Expand/collapse button in table */
+.btn-expand {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.btn-expand:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
+/* Detail row (expandable) */
+.eval-detail td {
+    padding: 0 !important;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.eval-detail-content {
+    padding: 1rem 1.5rem;
+    background: #fafafa;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.detail-item {
+    text-align: center;
+}
+
+.detail-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.detail-value {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* AI assessment block */
+.ai-assessment {
+    padding: 0.75rem 1rem;
+    background: white;
+    border-left: 3px solid #1a1a2e;
+    border-radius: 0 4px 4px 0;
+    margin-top: 0.5rem;
+}
+
+.ai-assessment p {
+    margin-top: 0.25rem;
+    color: #555;
+    line-height: 1.5;
+}
+
+/* Hint text for evaluation section */
+.eval-hint {
+    color: #666;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+}
+
+/* Score distribution in analytics */
+.score-distribution {
+    margin-top: 1rem;
+}
+
+.score-distribution h3 {
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: #666;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
 
@@ -699,6 +828,11 @@ footer {
     .table td {
         white-space: nowrap;
         padding: 0.75rem 0.5rem;
+    }
+
+    /* Evaluation detail grid */
+    .detail-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     /* Upload Area */

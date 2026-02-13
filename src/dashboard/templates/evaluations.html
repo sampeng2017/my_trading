@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluations - Trading System{% endblock %}
+
+{% block content %}
+<h1>Recommendation Evaluations</h1>
+
+<!-- Run Evaluation Controls -->
+{% if user %}
+<section class="card">
+    <h2>Run Evaluation</h2>
+    <p class="eval-hint">Evaluate past BUY/SELL recommendations against actual market performance.</p>
+    <div id="eval-status" class="run-status"></div>
+    <div id="eval-logs" class="run-logs" style="display: none;"></div>
+    <button class="btn btn-run" id="btn-evaluate" onclick="triggerEvaluation()">
+        Run Evaluation
+    </button>
+</section>
+{% endif %}
+
+<!-- Analytics Summary -->
+{% if analytics and analytics.total > 0 %}
+<section class="card analytics-card">
+    <h2>Summary</h2>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-label">Total Evaluated</span>
+            <span class="stat-value">{{ analytics.total }}</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Hit Rate</span>
+            <span class="stat-value">{{ analytics.hit_rate }}%</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Avg Price Change</span>
+            <span class="stat-value {{ 'positive' if analytics.avg_price_change >= 0 else 'negative' }}">
+                {{ "%+.2f"|format(analytics.avg_price_change) }}%
+            </span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Targets Hit</span>
+            <span class="stat-value">{{ analytics.target_hit_count }}/{{ analytics.total }}</span>
+        </div>
+    </div>
+
+    <div class="score-distribution">
+        <h3>Score Distribution</h3>
+        <div class="symbol-chips">
+            <span class="score-chip score-excellent">Excellent: {{ analytics.score_distribution.excellent }}</span>
+            <span class="score-chip score-good">Good: {{ analytics.score_distribution.good }}</span>
+            <span class="score-chip score-neutral">Neutral: {{ analytics.score_distribution.neutral }}</span>
+            <span class="score-chip score-poor">Poor: {{ analytics.score_distribution.poor }}</span>
+            <span class="score-chip score-bad">Bad: {{ analytics.score_distribution.bad }}</span>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- Filter and Table -->
+<section class="card">
+    <div class="filter-bar">
+        <label for="score-filter">Score:</label>
+        <select id="score-filter" onchange="applyFilters()">
+            <option value="" {% if not selected_score %}selected{% endif %}>All</option>
+            <option value="excellent" {% if selected_score == 'excellent' %}selected{% endif %}>Excellent</option>
+            <option value="good" {% if selected_score == 'good' %}selected{% endif %}>Good</option>
+            <option value="neutral" {% if selected_score == 'neutral' %}selected{% endif %}>Neutral</option>
+            <option value="poor" {% if selected_score == 'poor' %}selected{% endif %}>Poor</option>
+            <option value="bad" {% if selected_score == 'bad' %}selected{% endif %}>Bad</option>
+        </select>
+        <label for="symbol-filter">Symbol:</label>
+        <select id="symbol-filter" onchange="applyFilters()">
+            <option value="" {% if not selected_symbol %}selected{% endif %}>All</option>
+            {% for sym in all_symbols %}
+            <option value="{{ sym }}" {% if selected_symbol == sym %}selected{% endif %}>{{ sym }}</option>
+            {% endfor %}
+        </select>
+        <span class="result-count">{{ evaluations|length }} evaluations</span>
+    </div>
+
+    {% if evaluations %}
+    <table class="table sortable" id="evaluations-table">
+        <thead>
+            <tr>
+                <th class="sortable-header" data-sort="date" data-type="date">Rec Date <span class="sort-icon">&#x21C5;</span></th>
+                <th class="sortable-header" data-sort="symbol" data-type="string">Symbol <span class="sort-icon">&#x21C5;</span></th>
+                <th class="sortable-header" data-sort="action" data-type="string">Action <span class="sort-icon">&#x21C5;</span></th>
+                <th class="sortable-header" data-sort="confidence" data-type="number">Confidence <span class="sort-icon">&#x21C5;</span></th>
+                <th class="sortable-header" data-sort="price_change" data-type="number">Price Change <span class="sort-icon">&#x21C5;</span></th>
+                <th class="sortable-header" data-sort="score" data-type="string">Score <span class="sort-icon">&#x21C5;</span></th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in evaluations %}
+            <tr data-timestamp="{{ e.recommendation_date or '' }}" class="eval-row" data-row-id="{{ loop.index }}">
+                <td><span class="local-time" data-timestamp="{{ e.recommendation_date }}">{{ e.formatted_rec_date }}</span></td>
+                <td><strong>{{ e.symbol }}</strong></td>
+                <td class="action-{{ e.original_action|lower }}">{{ e.original_action }}</td>
+                <td>{{ "%.0f"|format((e.original_confidence or 0) * 100) }}%</td>
+                <td class="{{ 'positive' if (e.price_change_pct or 0) >= 0 else 'negative' }}">
+                    {{ "%+.2f"|format(e.price_change_pct or 0) }}%
+                </td>
+                <td><span class="score-badge score-{{ e.score }}">{{ e.score|capitalize }}</span></td>
+                <td>
+                    <button class="btn-expand" onclick="toggleDetail({{ loop.index }})">&#x25BC;</button>
+                </td>
+            </tr>
+            <tr class="eval-detail" id="detail-{{ loop.index }}" style="display: none;">
+                <td colspan="7">
+                    <div class="eval-detail-content">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Price at Rec</span>
+                                <span class="detail-value">${{ "%.2f"|format(e.price_at_recommendation or 0) }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Price Now</span>
+                                <span class="detail-value">${{ "%.2f"|format(e.price_at_evaluation or 0) }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Max Favorable</span>
+                                <span class="detail-value positive">{{ "%+.2f"|format(e.max_favorable_move_pct or 0) }}%</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Max Adverse</span>
+                                <span class="detail-value negative">{{ "%+.2f"|format(e.max_adverse_move_pct or 0) }}%</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Target Hit</span>
+                                <span class="detail-value">{{ 'Yes' if e.target_hit else 'No' }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Stop Hit</span>
+                                <span class="detail-value">{{ 'Yes' if e.stop_loss_hit else 'No' }}</span>
+                            </div>
+                        </div>
+                        {% if e.ai_assessment %}
+                        <div class="ai-assessment">
+                            <strong>AI Assessment:</strong>
+                            <p>{{ e.ai_assessment }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No evaluations found. Run an evaluation to get started.</p>
+    {% endif %}
+</section>
+
+<script>
+    // --- Filter logic ---
+    function applyFilters() {
+        var score = document.getElementById('score-filter').value;
+        var symbol = document.getElementById('symbol-filter').value;
+        var params = new URLSearchParams();
+        if (score) params.set('score', score);
+        if (symbol) params.set('symbol', symbol);
+        window.location.href = '/evaluations' + (params.toString() ? '?' + params.toString() : '');
+    }
+
+    // --- Expandable row logic ---
+    function toggleDetail(rowId) {
+        var detailRow = document.getElementById('detail-' + rowId);
+        var btn = detailRow.previousElementSibling.querySelector('.btn-expand');
+        if (detailRow.style.display === 'none') {
+            detailRow.style.display = 'table-row';
+            btn.innerHTML = '&#x25B2;';
+        } else {
+            detailRow.style.display = 'none';
+            btn.innerHTML = '&#x25BC;';
+        }
+    }
+
+    // --- Run Evaluation trigger + polling ---
+    var evalJobId = null;
+    var evalPollInterval = null;
+
+    async function triggerEvaluation() {
+        var statusDiv = document.getElementById('eval-status');
+        var logsDiv = document.getElementById('eval-logs');
+        var btn = document.getElementById('btn-evaluate');
+
+        btn.disabled = true;
+        statusDiv.innerHTML = '<span class="status-pending">Starting evaluation...</span>';
+        logsDiv.style.display = 'block';
+        logsDiv.textContent = '';
+
+        try {
+            var response = await fetch('/api/agent/evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            var data = await response.json();
+            var errorMsg = data.error || data.detail;
+            if (!response.ok || errorMsg) {
+                statusDiv.innerHTML = '<span class="status-error">Error: ' + (errorMsg || 'Request failed') + '</span>';
+                btn.disabled = false;
+                logsDiv.style.display = 'none';
+                return;
+            }
+
+            evalJobId = data.job_id;
+            statusDiv.innerHTML = '<span class="status-running">Evaluating recommendations...</span>';
+            evalPollInterval = setInterval(checkEvalStatus, 2000);
+
+        } catch (error) {
+            statusDiv.innerHTML = '<span class="status-error">Error: ' + error.message + '</span>';
+            btn.disabled = false;
+            logsDiv.style.display = 'none';
+        }
+    }
+
+    async function checkEvalStatus() {
+        if (!evalJobId) return;
+
+        try {
+            var response = await fetch('/api/orchestrator/status/' + evalJobId);
+            var data = await response.json();
+
+            var statusDiv = document.getElementById('eval-status');
+            var logsDiv = document.getElementById('eval-logs');
+            var btn = document.getElementById('btn-evaluate');
+
+            var errorMsg = data.error || data.detail;
+            if (!response.ok || errorMsg) {
+                statusDiv.innerHTML = '<span class="status-error">Error: ' + (errorMsg || 'Status check failed') + '</span>';
+                clearInterval(evalPollInterval);
+                evalJobId = null;
+                btn.disabled = false;
+                return;
+            }
+
+            if (data.logs) {
+                logsDiv.textContent = data.logs;
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            }
+
+            if (data.status === 'completed') {
+                statusDiv.innerHTML = '<span class="status-completed">Completed! Refreshing...</span>';
+                clearInterval(evalPollInterval);
+                evalJobId = null;
+                btn.disabled = false;
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } else if (data.status === 'failed') {
+                statusDiv.innerHTML = '<span class="status-error">Failed: ' + (data.error_message || 'Unknown error') + '</span>';
+                clearInterval(evalPollInterval);
+                evalJobId = null;
+                btn.disabled = false;
+            } else {
+                statusDiv.innerHTML = '<span class="status-running">Evaluating recommendations...</span>';
+            }
+        } catch (error) {
+            console.error('Eval status check failed:', error);
+        }
+    }
+
+    // --- Sortable table ---
+    document.addEventListener('DOMContentLoaded', function () {
+        var table = document.getElementById('evaluations-table');
+        if (!table) return;
+
+        var headers = table.querySelectorAll('.sortable-header');
+        var currentSort = { column: null, direction: 'asc' };
+
+        headers.forEach(function(header, index) {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', function() { sortTable(index, header); });
+        });
+
+        function sortTable(columnIndex, header) {
+            var tbody = table.querySelector('tbody');
+            var allRows = Array.from(tbody.querySelectorAll('tr'));
+            var dataRows = allRows.filter(function(r) { return r.classList.contains('eval-row'); });
+            var sortType = header.dataset.type || 'string';
+            var sortKey = header.dataset.sort;
+
+            var direction = (currentSort.column === columnIndex && currentSort.direction === 'asc') ? 'desc' : 'asc';
+            currentSort = { column: columnIndex, direction: direction };
+
+            // Update sort icons
+            headers.forEach(function(h) {
+                var icon = h.querySelector('.sort-icon');
+                if (icon) icon.textContent = '\u21C5';
+            });
+            var currentIcon = header.querySelector('.sort-icon');
+            if (currentIcon) currentIcon.textContent = direction === 'asc' ? '\u2191' : '\u2193';
+
+            // Sort data rows
+            dataRows.sort(function(a, b) {
+                var aVal, bVal;
+
+                if (sortKey === 'date') {
+                    aVal = a.dataset.timestamp || '';
+                    bVal = b.dataset.timestamp || '';
+                } else if (sortType === 'number') {
+                    aVal = parseFloat(a.cells[columnIndex].textContent) || 0;
+                    bVal = parseFloat(b.cells[columnIndex].textContent) || 0;
+                } else {
+                    aVal = a.cells[columnIndex].textContent.trim().toLowerCase();
+                    bVal = b.cells[columnIndex].textContent.trim().toLowerCase();
+                }
+
+                var result;
+                if (sortType === 'number') {
+                    result = aVal - bVal;
+                } else {
+                    result = String(aVal).localeCompare(String(bVal));
+                }
+
+                return direction === 'asc' ? result : -result;
+            });
+
+            // Re-append rows keeping detail rows paired with their data row
+            dataRows.forEach(function(row) {
+                tbody.appendChild(row);
+                var rowId = row.dataset.rowId;
+                var detailRow = document.getElementById('detail-' + rowId);
+                if (detailRow) tbody.appendChild(detailRow);
+            });
+        }
+    });
+</script>
+{% endblock %}

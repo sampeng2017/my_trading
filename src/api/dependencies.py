@@ -79,3 +79,10 @@ def get_trade_advisor():
     market_analyst = MarketAnalyst(db_path, alpaca_key, alpaca_secret, ma_config)
 
     return TradeAdvisor(db_path, gemini_key, config, market_analyst)
+
+def get_recommendation_evaluator():
+    from src.agents.recommendation_evaluator import RecommendationEvaluator
+    config = get_config().config
+    db_path = get_db_path()
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    return RecommendationEvaluator(db_path, gemini_key, config)

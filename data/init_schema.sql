@@ -122,10 +122,33 @@ CREATE TABLE IF NOT EXISTS screener_runs (
     error TEXT
 );
 
+-- Recommendation Evaluations (assessing past recommendation quality)
+CREATE TABLE IF NOT EXISTS recommendation_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recommendation_id INTEGER NOT NULL UNIQUE,
+    symbol TEXT NOT NULL,
+    original_action TEXT NOT NULL,
+    original_confidence DECIMAL(3, 2),
+    original_target_price DECIMAL(10, 4),
+    original_stop_loss DECIMAL(10, 4),
+    recommendation_date DATETIME NOT NULL,
+    evaluation_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    price_at_recommendation DECIMAL(10, 4),
+    price_at_evaluation DECIMAL(10, 4),
+    price_change_pct DECIMAL(8, 4),
+    target_hit INTEGER DEFAULT 0,
+    stop_loss_hit INTEGER DEFAULT 0,
+    max_favorable_move_pct DECIMAL(8, 4),
+    max_adverse_move_pct DECIMAL(8, 4),
+    score TEXT CHECK(score IN ('excellent', 'good', 'neutral', 'poor', 'bad')),
+    ai_assessment TEXT,
+    FOREIGN KEY(recommendation_id) REFERENCES strategy_recommendations(id)
+);
+
 -- Orchestrator Runs (triggered via API or scheduled)
 CREATE TABLE IF NOT EXISTS orchestrator_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    mode TEXT NOT NULL CHECK(mode IN ('premarket', 'market', 'postmarket', 'review')),
+    mode TEXT NOT NULL CHECK(mode IN ('premarket', 'market', 'postmarket', 'review', 'evaluate')),
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped')),
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
@@ -142,3 +165,5 @@ CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON strategy_recommendat
 CREATE INDEX IF NOT EXISTS idx_portfolio_timestamp ON portfolio_snapshot(import_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_screener_results_timestamp ON screener_results(screening_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_orchestrator_status ON orchestrator_runs(status);
+CREATE INDEX IF NOT EXISTS idx_evaluations_date ON recommendation_evaluations(evaluation_date DESC);
+CREATE INDEX IF NOT EXISTS idx_evaluations_symbol ON recommendation_evaluations(symbol, evaluation_date DESC);

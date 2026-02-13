@@ -182,6 +182,7 @@ async def chat_api(request: Request):
 
 # Import orchestrator functions directly to avoid HTTP calls
 from src.api.routers import orchestrator as orch_module
+from src.api.routers import agent as agent_module
 from fastapi import HTTPException
 
 
@@ -317,3 +318,97 @@ async def import_portfolio(request: Request, file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+# ========================
+# Evaluations
+# ========================
+
+@router.get("/evaluations")
+async def evaluations_page(request: Request, score: str = "", symbol: str = ""):
+    """Recommendation evaluations view with analytics and filters."""
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    evaluations = []
+    all_symbols = []
+    analytics = {
+        'total': 0,
+        'score_distribution': {'excellent': 0, 'good': 0, 'neutral': 0, 'poor': 0, 'bad': 0},
+        'hit_rate': 0,
+        'avg_price_change': 0,
+        'target_hit_count': 0,
+        'stop_hit_count': 0,
+    }
+
+    try:
+        from src.api.dependencies import get_recommendation_evaluator
+        evaluator = get_recommendation_evaluator()
+
+        # Fetch all for analytics and symbol list
+        all_evaluations = evaluator.get_recent_evaluations(limit=100)
+        all_symbols = sorted(set(e.get('symbol', '') for e in all_evaluations))
+
+        # Apply filters
+        filtered = all_evaluations
+        if symbol:
+            filtered = [e for e in filtered if e.get('symbol') == symbol.upper()]
+        if score:
+            filtered = [e for e in filtered if e.get('score') == score]
+
+        # Format timestamps
+        for e in filtered:
+            e['formatted_rec_date'] = format_timestamp(e.get('recommendation_date'))
+            e['formatted_eval_date'] = format_timestamp(e.get('evaluation_date'))
+
+        evaluations = filtered
+
+        # Calculate analytics on filtered set
+        analytics['total'] = len(evaluations)
+        for e in evaluations:
+            s = e.get('score', 'neutral')
+            if s in analytics['score_distribution']:
+                analytics['score_distribution'][s] += 1
+            if e.get('target_hit'):
+                analytics['target_hit_count'] += 1
+            if e.get('stop_loss_hit'):
+                analytics['stop_hit_count'] += 1
+
+        if analytics['total'] > 0:
+            total_pct = sum(e.get('price_change_pct', 0) for e in evaluations)
+            analytics['avg_price_change'] = round(total_pct / analytics['total'], 2)
+
+            correct = sum(
+                1 for e in evaluations
+                if (e.get('original_action') == 'BUY' and (e.get('price_change_pct') or 0) > 0)
+                or (e.get('original_action') == 'SELL' and (e.get('price_change_pct') or 0) < 0)
+            )
+            analytics['hit_rate'] = round(correct / analytics['total'] * 100, 1)
+
+    except Exception:
+        pass
+
+    return templates.TemplateResponse("evaluations.html", {
+        "request": request,
+        "user": user,
+        "evaluations": evaluations,
+        "analytics": analytics,
+        "selected_score": score,
+        "selected_symbol": symbol,
+        "all_symbols": all_symbols,
+    })
+
+
+@router.post("/api/agent/evaluate")
+async def trigger_evaluation(request: Request):
+    """Trigger recommendation evaluation from dashboard."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Login required"}, status_code=401)
+
+    try:
+        result = await agent_module.run_evaluation(agent_module.EvaluateRequest())
+        return JSONResponse(result.model_dump())
+    except HTTPException as e:
+        return JSONResponse({"error": e.detail}, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)

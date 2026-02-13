@@ -81,3 +81,9 @@ screener:
   llm_candidate_pool: 10           # How many to send to LLM for ranking
   model_screening: "gemini-2.0-flash"  # Gemini 2.0 Flash
   temperature_screening: 0.2       # Low temp for consistent rankings
+
+# Recommendation Evaluation
+evaluation:
+  min_age_days: 7                  # Minimum days before evaluating a recommendation
+  max_age_days: 21                 # Maximum lookback window
+  top_n: 10                        # Max recommendations to evaluate per run
