@@ -391,21 +391,32 @@ Output ONLY the JSON array, no other text."""
     
     def _write_to_db(self, analysis: Dict):
         """Store news analysis in database."""
+        # Sanitize enum fields to match DB CHECK constraints
+        sentiment = str(analysis.get('sentiment', 'neutral')).lower().strip()
+        if sentiment not in ('positive', 'negative', 'neutral'):
+            sentiment = 'neutral'
+        action = str(analysis.get('implied_action', 'HOLD')).upper().strip()
+        if action not in ('BUY', 'SELL', 'HOLD'):
+            action = 'HOLD'
+        urgency = str(analysis.get('urgency', 'low')).lower().strip()
+        if urgency not in ('high', 'medium', 'low'):
+            urgency = 'low'
+
         with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             cursor.execute("""
-                INSERT INTO news_analysis 
+                INSERT INTO news_analysis
                 (symbol, headline, sentiment, confidence, implied_action, key_reason, urgency, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 analysis.get('symbol'),
                 analysis.get('headline'),
-                analysis.get('sentiment'),
+                sentiment,
                 analysis.get('confidence'),
-                analysis.get('implied_action'),
+                action,
                 analysis.get('key_reason'),
-                analysis.get('urgency'),
+                urgency,
                 analysis.get('timestamp')
             ))
             
